@@ -1,7 +1,9 @@
 from collections.abc import Callable
 
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QIcon, QKeySequence, Qt
 from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar, QVBoxLayout, QWidget
+
+from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 
 
 class MainWindow(QMainWindow):
@@ -20,6 +22,7 @@ class MainWindow(QMainWindow):
         self._setup_central_widget()
         self._setup_menu_bar()
         self._setup_toolbar()
+        self._setup_project_explorer()
 
     def _setup_central_widget(self) -> None:
         """Set up the central application widget."""
@@ -167,6 +170,11 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
         toolbar.addAction(self._add_content_action)
         toolbar.addAction(self._delete_selected_content_action)
+
+    def _setup_project_explorer(self) -> None:
+        """Set up the application dock widgets."""
+        self._project_explorer = ProjectExplorer(self)
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
 
     def _create_action(
         self,
