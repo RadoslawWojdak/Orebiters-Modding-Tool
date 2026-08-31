@@ -1,9 +1,10 @@
 from collections.abc import Callable
 
 from PySide6.QtGui import QAction, QIcon, QKeySequence, Qt
-from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar
 
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
+from orebiters_modding_tool.app.widgets.workspace import Workspace
 
 
 class MainWindow(QMainWindow):
@@ -19,17 +20,15 @@ class MainWindow(QMainWindow):
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
         self._setup_actions()
-        self._setup_central_widget()
         self._setup_menu_bar()
         self._setup_toolbar()
         self._setup_project_explorer()
+        self._setup_workspace()
 
-    def _setup_central_widget(self) -> None:
-        """Set up the central application widget."""
-        central_widget = QWidget()
-        self._main_layout = QVBoxLayout(central_widget)
-
-        self.setCentralWidget(central_widget)
+    def _setup_workspace(self) -> None:
+        """Set up the central application workspace."""
+        self._workspace = Workspace(self)
+        self.setCentralWidget(self._workspace)
 
     def _setup_actions(self) -> None:
         """Set up the application actions."""
