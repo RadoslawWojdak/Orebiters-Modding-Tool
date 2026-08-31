@@ -1,10 +1,12 @@
 from collections.abc import Callable
 
-from PySide6.QtGui import QAction, QIcon, QKeySequence, Qt
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QAction, QIcon, QKeySequence
 from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar
 
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.app.widgets.workspace import Workspace
+from orebiters_modding_tool.domain.content_reference import ContentReference
 
 
 class MainWindow(QMainWindow):
@@ -20,10 +22,10 @@ class MainWindow(QMainWindow):
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
         self._setup_actions()
+        self._setup_workspace()
         self._setup_menu_bar()
         self._setup_toolbar()
         self._setup_project_explorer()
-        self._setup_workspace()
 
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
@@ -171,9 +173,12 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._delete_selected_content_action)
 
     def _setup_project_explorer(self) -> None:
-        """Set up the application dock widgets."""
+        """Set up the Project Explorer dock."""
         self._project_explorer = ProjectExplorer(self)
+
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
+
+        self._project_explorer.content_open_requested.connect(self._open_content)
 
     def _create_action(
         self,
@@ -263,3 +268,10 @@ class MainWindow(QMainWindow):
     def _show_about_dialog(self) -> None:
         """Show information about the application."""
         pass
+
+    def _open_content(self, content_reference: ContentReference) -> None:
+        """Open the selected content in the workspace.
+
+        :param content_reference: Reference to the selected content.
+        """
+        self._workspace.open_content(content_reference)
