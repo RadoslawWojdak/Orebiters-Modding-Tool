@@ -5,7 +5,7 @@ from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewWidget,
 )
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
-from orebiters_modding_tool.domain.content_reference import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference
 
 
 class Workspace(QWidget):

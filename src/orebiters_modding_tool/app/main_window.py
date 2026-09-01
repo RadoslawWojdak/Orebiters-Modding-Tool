@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar
 
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.app.widgets.workspace import Workspace
-from orebiters_modding_tool.domain.content_reference import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference
 
 
 class MainWindow(QMainWindow):

@@ -2,8 +2,7 @@ from PySide6.QtCore import QModelIndex, Qt, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QDockWidget, QTreeView, QWidget
 
-from orebiters_modding_tool.domain.content_reference import ContentReference
-from orebiters_modding_tool.domain.content_type import ContentType
+from orebiters_modding_tool.domain.content import ContentReference, ContentType
 
 
 class ProjectExplorer(QDockWidget):
@@ -26,18 +25,17 @@ class ProjectExplorer(QDockWidget):
         """Set up the Project Explorer model."""
         self._model = QStandardItemModel(self)
 
-        entities_item = self._create_item("Entities")
-        creatures_item = self._create_item(
-            "Creatures",
-            content_reference=ContentReference(
-                content_type=ContentType.CREATURES,
-            ),
-        )
-
         items_item = self._create_item(
             "Items",
             content_reference=ContentReference(
                 content_type=ContentType.ITEMS,
+            ),
+        )
+
+        materials_item = self._create_item(
+            "Materials",
+            content_reference=ContentReference(
+                content_type=ContentType.MATERIALS,
             ),
         )
 
@@ -48,10 +46,8 @@ class ProjectExplorer(QDockWidget):
             ),
         )
 
-        entities_item.appendRow(creatures_item)
-
-        self._model.appendRow(entities_item)
         self._model.appendRow(items_item)
+        self._model.appendRow(materials_item)
         self._model.appendRow(resources_item)
 
     def _setup_tree_view(self) -> None:

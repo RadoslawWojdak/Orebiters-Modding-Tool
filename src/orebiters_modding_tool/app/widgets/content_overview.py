@@ -4,7 +4,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import QLabel, QVBoxLayout, QWidget
 
-from orebiters_modding_tool.domain.content_reference import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
