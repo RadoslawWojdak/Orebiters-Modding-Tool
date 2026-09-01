@@ -41,7 +41,7 @@ class ContentReferenceFactory:
     def from_content(
         content: Content[TLocalization],
         *,
-        mod_id: str = "test",
+        mod_id: str = "test.test_mod",
     ) -> ContentReference:
         """Create a reference to existing content.
 

@@ -1,12 +1,15 @@
+import json
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QIcon, QKeySequence
-from PySide6.QtWidgets import QMainWindow, QStyle, QToolBar
+from PySide6.QtWidgets import QDialog, QInputDialog, QMainWindow, QMessageBox, QStyle, QToolBar
 
+from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDialog
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.services.project_service import ProjectService
 
 
 class MainWindow(QMainWindow):
@@ -15,8 +18,14 @@ class MainWindow(QMainWindow):
     DEFAULT_WIDTH = 800
     DEFAULT_HEIGHT = 600
 
-    def __init__(self) -> None:
+    def __init__(self, project_service: ProjectService) -> None:
+        """Initialize the main window.
+
+        :param project_service: Service used to manage mod projects.
+        """
         super().__init__()
+
+        self._project_service = project_service
 
         self.setWindowTitle("Orebiters Modding Tool")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
@@ -26,6 +35,8 @@ class MainWindow(QMainWindow):
         self._setup_menu_bar()
         self._setup_toolbar()
         self._setup_project_explorer()
+
+        self._update_project_actions()
 
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
@@ -54,11 +65,6 @@ class MainWindow(QMainWindow):
             self._save_project,
             shortcut=QKeySequence.StandardKey.Save,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton),
-        )
-        self._save_as_action = self._create_action(
-            "Save As",
-            self._save_project_as,
-            shortcut=QKeySequence.StandardKey.SaveAs,
         )
         self._exit_action = self._create_action(
             "Exit",
@@ -138,7 +144,6 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self._new_action)
         file_menu.addAction(self._open_action)
         file_menu.addAction(self._save_action)
-        file_menu.addAction(self._save_as_action)
         file_menu.addSeparator()
         file_menu.addAction(self._exit_action)
 
@@ -207,19 +212,63 @@ class MainWindow(QMainWindow):
 
     def _new_project(self) -> None:
         """Create a new project."""
-        pass
+        dialog = NewProjectDialog(self)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
+        try:
+            project = self._project_service.create_project(dialog.namespace, dialog.name)
+        except FileExistsError:
+            QMessageBox.warning(
+                self,
+                "Project Already Exists",
+                "A project with this identifier already exists.",
+            )
+            return
+
+        self._set_active_project(project.name)
 
     def _open_project(self) -> None:
         """Open an existing project."""
-        pass
+        project_ids = self._project_service.list_project_qualified_ids()
+
+        if not project_ids:
+            QMessageBox.information(self, "Open Project", "No projects were found.")
+            return
+
+        qualified_id, accepted = QInputDialog.getItem(
+            self,
+            "Open Project",
+            "Project:",
+            project_ids,
+            editable=False,
+        )
+
+        if not accepted:
+            return
+
+        try:
+            project = self._project_service.open_project(qualified_id)
+        except (
+            FileNotFoundError,
+            PermissionError,
+            OSError,
+            ValueError,
+            KeyError,
+            json.JSONDecodeError,
+        ) as error:
+            QMessageBox.critical(self, "Unable to Open Project", str(error))
+            return
+
+        self._set_active_project(project.name)
 
     def _save_project(self) -> None:
         """Save the current project."""
-        pass
-
-    def _save_project_as(self) -> None:
-        """Save the current project to a new location."""
-        pass
+        try:
+            self._project_service.save_project()
+        except OSError as error:
+            QMessageBox.critical(self, "Unable to Save Project", str(error))
 
     def _exit_application(self) -> None:
         """Close the application."""
@@ -275,3 +324,17 @@ class MainWindow(QMainWindow):
         :param content_reference: Reference to the selected content.
         """
         self._workspace.open_content(content_reference)
+
+    def _set_active_project(self, project_name: str) -> None:
+        """Update the window for the active project.
+
+        :param project_name: Name of the active project.
+        """
+        self.setWindowTitle(f"{project_name} - Orebiters Modding Tool")
+        self._update_project_actions()
+
+    def _update_project_actions(self) -> None:
+        """Update actions that depend on an active project."""
+        has_active_project = self._project_service.has_active_project
+
+        self._save_action.setEnabled(has_active_project)
