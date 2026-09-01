@@ -101,7 +101,7 @@ class Workspace(QWidget):
         """
         content_type_name = content_reference.content_type.value.replace("_", " ").title()
 
-        if content_reference.content_id is None:
+        if content_reference.qualified_id is None:
             return content_type_name
 
         return f"{content_type_name} {content_reference.content_id}"
