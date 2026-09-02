@@ -9,6 +9,7 @@ from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDial
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.services.project_service import ProjectService
 
 
@@ -227,7 +228,7 @@ class MainWindow(QMainWindow):
             )
             return
 
-        self._set_active_project(project.name)
+        self._set_active_project(project)
 
     def _open_project(self) -> None:
         """Open an existing project."""
@@ -261,7 +262,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Unable to Open Project", str(error))
             return
 
-        self._set_active_project(project.name)
+        self._set_active_project(project)
 
     def _save_project(self) -> None:
         """Save the current project."""
@@ -325,12 +326,13 @@ class MainWindow(QMainWindow):
         """
         self._workspace.open_content(content_reference)
 
-    def _set_active_project(self, project_name: str) -> None:
+    def _set_active_project(self, project: Project) -> None:
         """Update the window for the active project.
 
-        :param project_name: Name of the active project.
+        :param project: Project that became active.
         """
-        self.setWindowTitle(f"{project_name} - Orebiters Modding Tool")
+        self.setWindowTitle(f"{project.name} - Orebiters Modding Tool")
+        self._workspace.set_project(project)
         self._update_project_actions()
 
     def _update_project_actions(self) -> None:
