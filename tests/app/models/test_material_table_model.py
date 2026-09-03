@@ -1,5 +1,5 @@
+from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.domain.material import MaterialRequirement
-from orebiters_modding_tool.models.material_table_model import MaterialTableModel
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
 

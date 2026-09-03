@@ -21,8 +21,10 @@ class ContentTableView(QTableView):
         """Configure the table view."""
         self.setAlternatingRowColors(True)
         self.setSortingEnabled(False)
+
         self.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
-        self.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+        self.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
+
         self.setEditTriggers(
             QTableView.EditTrigger.DoubleClicked | QTableView.EditTrigger.EditKeyPressed,
         )

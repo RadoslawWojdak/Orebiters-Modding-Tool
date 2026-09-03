@@ -1,6 +1,7 @@
 from PySide6.QtCore import QAbstractItemModel
 from PySide6.QtWidgets import QTabWidget, QVBoxLayout, QWidget
 
+from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewConfig,
     ContentOverviewWidget,
@@ -8,7 +9,6 @@ from orebiters_modding_tool.app.widgets.content_overview import (
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.project import Project
-from orebiters_modding_tool.models.material_table_model import MaterialTableModel
 
 
 class Workspace(QWidget):

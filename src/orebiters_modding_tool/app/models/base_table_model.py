@@ -1,6 +1,6 @@
 from PySide6.QtCore import QAbstractTableModel, QModelIndex, QObject, QPersistentModelIndex, Qt
 
-from orebiters_modding_tool.models.column import Column
+from orebiters_modding_tool.app.models.column import Column
 
 ModelIndex = QModelIndex | QPersistentModelIndex
 EMPTY_MODEL_INDEX = QModelIndex()
@@ -141,3 +141,41 @@ class BaseTableModel[T](QAbstractTableModel):
         self.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole])
 
         return True
+
+    def add_item(self, item: T) -> None:
+        """Add an item to the model.
+
+        :param item: Item to add.
+        """
+        row = len(self._items)
+
+        self.beginInsertRows(EMPTY_MODEL_INDEX, row, row)
+        self._items.append(item)
+        self.endInsertRows()
+
+    def remove_items(self, first: int, last: int) -> list[T]:
+        """Remove and return a range of items from the model.
+
+        :param first: Index of the first item to remove.
+        :param last: Index of the last item to remove.
+        :returns: Removed items.
+        """
+        if not 0 <= first <= last < len(self._items):
+            raise IndexError(f"Invalid range: {first}-{last}.")
+
+        self.beginRemoveRows(EMPTY_MODEL_INDEX, first, last)
+
+        items = self._items[first : last + 1]
+        del self._items[first : last + 1]
+
+        self.endRemoveRows()
+
+        return items
+
+    def remove_item(self, row: int) -> T:
+        """Remove and return an item from the model.
+
+        :param row: Row containing the item.
+        :returns: Removed item.
+        """
+        return self.remove_items(row, row)[0]
