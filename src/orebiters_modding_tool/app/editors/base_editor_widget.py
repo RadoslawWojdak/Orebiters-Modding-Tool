@@ -8,6 +8,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -32,6 +33,7 @@ class BaseEditorWidget[T](QWidget):
         parent: QWidget | None = None,
         *,
         read_only: bool = False,
+        show_save_button: bool = True,
     ) -> None:
         """Initialize the editor.
 
@@ -39,14 +41,29 @@ class BaseEditorWidget[T](QWidget):
         :param context: Additional data required by editor fields.
         :param parent: Optional parent widget.
         :param read_only: Whether the entire editor is read-only.
+        :param show_save_button: Whether to display the save button.
         """
         super().__init__(parent)
 
         self._item = item
         self._context = {} if context is None else context
         self._read_only = read_only
+        self._show_save_button = show_save_button
 
         self._setup_fields()
+
+    # =========================================================================
+    # Public API
+    # =========================================================================
+
+    def save(self) -> None:
+        """Save all editable field values to the edited item."""
+        for field_config in self.FIELDS:
+            self._save_field(field_config)
+
+    # =========================================================================
+    # Setup
+    # =========================================================================
 
     def _setup_fields(self) -> None:
         """Create and add editor fields."""
@@ -77,6 +94,7 @@ class BaseEditorWidget[T](QWidget):
             form_layout.addRow(field_config.label, field)
 
         self._layout.addStretch()
+        self._setup_save_button()
 
     def _get_field_value(self, field_config: EditorField) -> object:
         """Get the value displayed by an editor field.
@@ -120,6 +138,20 @@ class BaseEditorWidget[T](QWidget):
         if self._layout.count() > 0:
             self._layout.addSpacing(self.SECTION_SPACING)
 
+    def _setup_save_button(self) -> None:
+        """Create and add the save button when enabled."""
+        if self._read_only or not self._show_save_button:
+            return
+
+        self._save_button = QPushButton("Save", self)
+        self._save_button.clicked.connect(self.save)
+
+        self._layout.addWidget(self._save_button)
+
+    # =========================================================================
+    # Field Creation
+    # =========================================================================
+
     def _create_field(self, field_config: EditorField, value: object) -> QWidget:
         """Create an editor widget for a field value.
 
@@ -137,7 +169,13 @@ class BaseEditorWidget[T](QWidget):
             return self._create_dict_field(field_config, value)
 
         if field_config.editor_widget_type is not None:
-            return field_config.editor_widget_type(value, self._context, self, read_only=read_only)
+            return field_config.editor_widget_type(
+                value,
+                self._context,
+                self,
+                read_only=read_only,
+                show_save_button=False,
+            )
 
         if read_only:
             return self._create_read_only_field(value)
@@ -217,6 +255,8 @@ class BaseEditorWidget[T](QWidget):
         :returns: Configured integer editor.
         """
         field = QSpinBox(self)
+
+        field.setRange(-1_000_000_000, 1_000_000_000)
         field.setValue(value)
 
         return field
@@ -228,6 +268,8 @@ class BaseEditorWidget[T](QWidget):
         :returns: Configured floating-point editor.
         """
         field = QDoubleSpinBox(self)
+
+        field.setRange(-1_000_000_000.0, 1_000_000_000.0)
         field.setValue(value)
 
         return field
@@ -339,3 +381,97 @@ class BaseEditorWidget[T](QWidget):
             raise ValueError("Nested dictionaries are not supported.")
 
         return self._create_field(field_config, value)
+
+    # =========================================================================
+    # Saving
+    # =========================================================================
+
+    def _save_field(self, field_config: EditorField) -> None:
+        """Save a single editor field to the edited item.
+
+        :param field_config: Configuration of the field to save.
+        """
+        if field_config.read_only or field_config.value_provider is not None:
+            return
+
+        field = self._fields[field_config.name]
+        value = self._get_field_value_for_save(field)
+
+        setattr(self._item, field_config.name, value)
+
+    def _get_field_value_for_save(self, field: QWidget) -> object:
+        """Get the value represented by an editor widget for saving.
+
+        Nested editor widgets are saved before their edited items are returned.
+
+        :param field: Editor widget.
+        :returns: Current value represented by the widget.
+        :raises ValueError: If the widget type is unsupported.
+        """
+        if isinstance(field, ListWidget):
+            return self._get_list_value_for_save(field)
+
+        if isinstance(field, DictionaryWidget):
+            return self._get_dictionary_value_for_save(field)
+
+        if isinstance(field, BaseEditorWidget):
+            return self._save_editor_and_get_item(field)
+
+        return self._get_base_widget_value(field)
+
+    def _save_editor_and_get_item(self, editor: BaseEditorWidget[object]) -> object:
+        """Save a nested editor and return its edited item.
+
+        :param editor: Nested editor widget to save.
+        :returns: Item edited by the nested editor.
+        """
+        editor.save()
+
+        return editor._item
+
+    def _get_list_value_for_save(self, widget: ListWidget) -> list[object]:
+        """Get values from a list widget for saving.
+
+        Nested editor widgets are saved while their values are collected.
+
+        :param widget: List widget containing item editor widgets.
+        :returns: Current list values.
+        """
+        return [self._get_field_value_for_save(item_widget) for item_widget in widget._item_widgets]
+
+    def _get_dictionary_value_for_save(self, widget: DictionaryWidget) -> dict[object, object]:
+        """Get values from a dictionary widget for saving.
+
+        Nested editor widgets are saved while their values are collected.
+
+        :param widget: Dictionary widget containing item editor widgets.
+        :returns: Current dictionary values.
+        """
+        return {
+            key: self._get_field_value_for_save(item_widget)
+            for key, item_widget in widget._item_widgets.items()
+        }
+
+    def _get_base_widget_value(self, field: QWidget) -> object:
+        """Get the current value from a basic editor widget.
+
+        :param field: Basic editor widget.
+        :returns: Current widget value.
+        :raises ValueError: If the widget type is unsupported.
+        """
+        if isinstance(field, QLineEdit):
+            return field.text()
+
+        if isinstance(field, QSpinBox):
+            return field.value()
+
+        if isinstance(field, QDoubleSpinBox):
+            return field.value()
+
+        if isinstance(field, QCheckBox):
+            return field.isChecked()
+
+        if isinstance(field, QComboBox):
+            return field.currentData()
+
+        raise ValueError(f"Unsupported editor widget type: {type(field).__name__}.")

@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QLabel,
     QLineEdit,
+    QPushButton,
     QSpinBox,
     QVBoxLayout,
     QWidget,
@@ -212,6 +213,24 @@ class NestedListEditorWidget(BaseEditorWidget[SampleItem]):
             name="values",
             label="Values",
             item_factory=lambda _context: [],
+        ),
+    )
+
+
+class NestedItemEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor used to test nested editor saving."""
+
+    FIELDS = (EditorField(name="text", label="Text"),)
+
+
+class NestedDictionaryEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor used to test dictionary saving."""
+
+    FIELDS = (
+        EditorField(
+            name="mapping",
+            label="Mapping",
+            editor_widget_type=NestedItemEditorWidget,
         ),
     )
 
@@ -580,3 +599,223 @@ class TestBaseEditorWidget:
         editor = BasicFieldsEditorWidget(SampleItem(), context=context)
 
         assert editor._context is context
+
+    # =========================================================================
+    # Saving
+    # =========================================================================
+
+    def test_save_updates_basic_field_values(self, qapp: object) -> None:
+        """Save modified basic field values to the edited item."""
+        item = SampleItem()
+
+        editor = BasicFieldsEditorWidget(item)
+
+        text_field = editor._fields["text"]
+        number_field = editor._fields["number"]
+        decimal_field = editor._fields["decimal"]
+        enabled_field = editor._fields["enabled"]
+        enum_field = editor._fields["enum_value"]
+        optional_field = editor._fields["optional_value"]
+
+        assert isinstance(text_field, QLineEdit)
+        assert isinstance(number_field, QSpinBox)
+        assert isinstance(decimal_field, QDoubleSpinBox)
+        assert isinstance(enabled_field, QCheckBox)
+        assert isinstance(enum_field, QComboBox)
+        assert isinstance(optional_field, QLineEdit)
+
+        text_field.setText("Updated text")
+        number_field.setValue(123)
+        decimal_field.setValue(6.28)
+        enabled_field.setChecked(False)
+        enum_field.setCurrentIndex(1)
+        optional_field.setText("Optional value")
+
+        editor.save()
+
+        assert item.text == "Updated text"
+        assert item.number == 123
+        assert item.decimal == 6.28
+        assert item.enabled is False
+        assert item.enum_value is SampleEnum.SECOND
+        assert item.optional_value == "Optional value"
+
+    def test_save_updates_choice_field_value(self, qapp: object) -> None:
+        """Save the currently selected choice value."""
+        item = SampleItem(text="first")
+
+        editor = ChoiceEditorWidget(item)
+
+        field = editor._fields["text"]
+
+        assert isinstance(field, QComboBox)
+
+        field.setCurrentIndex(2)
+
+        editor.save()
+
+        assert item.text == "third"
+
+    def test_save_does_not_save_field_level_read_only_value(self, qapp: object) -> None:
+        """Do not save values from field-level read-only fields."""
+        item = SampleItem(text="Original text")
+
+        editor = ReadOnlyEditorWidget(item)
+
+        field = editor._fields["text"]
+
+        assert isinstance(field, QLabel)
+
+        field.setText("Modified text")
+
+        editor.save()
+
+        assert item.text == "Original text"
+
+    def test_save_does_not_modify_value_provider_value(self, qapp: object) -> None:
+        """Do not save values provided by a value provider."""
+        item = SampleItem(text="Original text")
+
+        editor = ValueProviderEditorWidget(item)
+
+        field = editor._fields["provided_value"]
+
+        assert isinstance(field, QLineEdit)
+
+        field.setText("Modified value")
+
+        editor.save()
+
+        assert item.text == "Original text"
+
+    def test_save_updates_list_values(self, qapp: object) -> None:
+        """Save modified list item values."""
+        item = SampleItem(values=["first", "second"])
+
+        editor = ListEditorWidget(item)
+
+        field = editor._fields["values"]
+
+        assert isinstance(field, ListWidget)
+
+        first_item_widget = field._item_widgets[0]
+        second_item_widget = field._item_widgets[1]
+
+        assert isinstance(first_item_widget, QLineEdit)
+        assert isinstance(second_item_widget, QLineEdit)
+
+        first_item_widget.setText("updated first")
+        second_item_widget.setText("updated second")
+
+        editor.save()
+
+        assert item.values == ["updated first", "updated second"]
+
+    def test_save_updates_dictionary_values(self, qapp: object) -> None:
+        """Save modified dictionary item values."""
+        first_value = SampleItem(text="first")
+        second_value = SampleItem(text="second")
+
+        item = SampleItem(
+            mapping={
+                "first": first_value,
+                "second": second_value,
+            }
+        )
+
+        editor = NestedDictionaryEditorWidget(item)
+
+        field = editor._fields["mapping"]
+
+        assert isinstance(field, DictionaryWidget)
+
+        first_editor = field._item_widgets["first"]
+        second_editor = field._item_widgets["second"]
+
+        assert isinstance(first_editor, NestedItemEditorWidget)
+        assert isinstance(second_editor, NestedItemEditorWidget)
+
+        first_text_field = first_editor._fields["text"]
+        second_text_field = second_editor._fields["text"]
+
+        assert isinstance(first_text_field, QLineEdit)
+        assert isinstance(second_text_field, QLineEdit)
+
+        first_text_field.setText("updated first")
+        second_text_field.setText("updated second")
+
+        editor.save()
+
+        assert item.mapping == {
+            "first": first_value,
+            "second": second_value,
+        }
+        assert first_value.text == "updated first"
+        assert second_value.text == "updated second"
+
+    # =========================================================================
+    # Save Button
+    # =========================================================================
+
+    def test_creates_save_button_by_default(self, qapp: object) -> None:
+        """Create a save button by default."""
+        editor = BasicFieldsEditorWidget(SampleItem())
+
+        assert isinstance(editor._save_button, QPushButton)
+        assert not editor._save_button.isVisible()
+
+        editor.show()
+
+        assert editor._save_button.isVisible()
+
+    def test_does_not_create_save_button_when_hidden(self, qapp: object) -> None:
+        """Do not create a save button when disabled."""
+        editor = BasicFieldsEditorWidget(SampleItem(), show_save_button=False)
+
+        assert not hasattr(editor, "_save_button")
+
+    def test_does_not_create_save_button_for_read_only_editor(self, qapp: object) -> None:
+        """Do not create a save button for a read-only editor."""
+        editor = BasicFieldsEditorWidget(SampleItem(), read_only=True)
+
+        assert not hasattr(editor, "_save_button")
+
+    def test_clicking_save_button_saves_editor_values(self, qapp: object) -> None:
+        """Save editor values when the save button is clicked."""
+        item = SampleItem(text="Original text")
+
+        editor = BasicFieldsEditorWidget(item)
+
+        field = editor._fields["text"]
+
+        assert isinstance(field, QLineEdit)
+
+        field.setText("Updated text")
+
+        editor._save_button.click()
+
+        assert item.text == "Updated text"
+
+    def test_nested_custom_editor_does_not_show_save_button(self, qapp: object) -> None:
+        """Do not show a save button inside nested custom editors."""
+        editor = CustomEditorWidget(SampleItem())
+
+        field = editor._fields["text"]
+
+        assert isinstance(field, EmptyEditorWidget)
+        assert not hasattr(field, "_save_button")
+
+    def test_nested_dictionary_editor_does_not_show_save_button(self, qapp: object) -> None:
+        """Do not show save buttons inside dictionary item editors."""
+        values = {"first": object()}
+
+        editor = DictionaryEditorWidget(SampleItem(mapping=values))
+
+        field = editor._fields["mapping"]
+
+        assert isinstance(field, DictionaryWidget)
+
+        nested_editor = field._item_widgets["first"]
+
+        assert isinstance(nested_editor, EmptyEditorWidget)
+        assert not hasattr(nested_editor, "_save_button")
