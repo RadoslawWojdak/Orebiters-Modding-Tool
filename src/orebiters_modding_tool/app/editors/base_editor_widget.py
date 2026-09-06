@@ -56,6 +56,14 @@ class BaseEditorWidget[T](QWidget):
     # Public API
     # =========================================================================
 
+    @property
+    def item(self) -> T:
+        """Return the edited item.
+
+        :returns: Edited item.
+        """
+        return self._item
+
     def save(self) -> None:
         """Save all editable field values to the edited item."""
         for field_config in self.FIELDS:

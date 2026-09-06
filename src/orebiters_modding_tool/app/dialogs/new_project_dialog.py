@@ -59,7 +59,7 @@ class NewProjectDialog(QDialog):
 
         form_layout = QFormLayout()
         form_layout.addRow("Namespace:", self._namespace_input)
-        form_layout.addRow("Project name:", self._name_input)
+        form_layout.addRow("Mod name:", self._name_input)
         form_layout.addRow(self._qualified_id_label)
 
         layout = QVBoxLayout(self)

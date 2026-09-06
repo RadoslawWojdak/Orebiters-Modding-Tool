@@ -13,8 +13,8 @@ from orebiters_modding_tool.domain.content import (
 class MaterialLocalization(ContentLocalization):
     """Localized material text."""
 
-    hint: str
-    description: str
+    hint: str = ""
+    description: str = ""
 
 
 @dataclass(slots=True)

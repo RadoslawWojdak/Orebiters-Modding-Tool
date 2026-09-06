@@ -43,10 +43,10 @@ class ProjectRepository:
 
         return Project(namespace=data["namespace"], mod_id=data["id"], name=data["name"])
 
-    def list_projects(self) -> list[Project]:
+    def load_all(self) -> list[Project]:
         """Load all available projects.
 
-        :returns: List of available projects.
+        :returns: List of loaded projects.
         """
         if not self._mods_directory.is_dir():
             return []

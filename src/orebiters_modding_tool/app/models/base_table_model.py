@@ -19,7 +19,7 @@ class BaseTableModel[T](QAbstractTableModel):
         """
         super().__init__(parent)
 
-        self._items = items
+        self._items = list(items)
 
     def rowCount(self, parent: ModelIndex = EMPTY_MODEL_INDEX) -> int:
         """Return the number of rows.
@@ -141,6 +141,14 @@ class BaseTableModel[T](QAbstractTableModel):
         self.dataChanged.emit(index, index, [Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole])
 
         return True
+
+    def get_item(self, row: int) -> T:
+        """Return the item at the specified row.
+
+        :param row: Row containing the item.
+        :returns: Item at the specified row.
+        """
+        return self._items[row]
 
     def add_item(self, item: T) -> None:
         """Add an item to the model.

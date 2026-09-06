@@ -1,15 +1,18 @@
 from collections import defaultdict
+from typing import Any, cast
 
-from orebiters_modding_tool.domain.material import MaterialLocalization
+from orebiters_modding_tool.domain.content import Content, ContentReference, ContentType
+from orebiters_modding_tool.domain.material import Material, MaterialLocalization
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.domain.project_identifier import normalize_identifier
+from orebiters_modding_tool.domain.project_registry import ProjectRegistry
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
 
 
 class ProjectService:
-    """Manage the currently active project."""
+    """Manage projects and their persistence."""
 
     def __init__(
         self,
@@ -26,17 +29,27 @@ class ProjectService:
         self._project_repository = project_repository
         self._localization_repository = localization_repository
         self._material_repository = material_repository
-        self._project: Project | None = None
+
+        self._project_registry = ProjectRegistry(self._load_all_projects())
+        self._active_project: Project | None = None
 
     @property
-    def project(self) -> Project | None:
+    def active_project(self) -> Project | None:
         """Return the currently active project."""
-        return self._project
+        return self._active_project
 
     @property
     def has_active_project(self) -> bool:
         """Return whether a project is currently active."""
-        return self._project is not None
+        return self._active_project is not None
+
+    def get_content_references(self, content_type: ContentType) -> tuple[ContentReference, ...]:
+        """Return references to content of the specified type.
+
+        :param content_type: Type of content to retrieve.
+        :returns: References to the requested content.
+        """
+        return self._project_registry.project_references.get(content_type, ())
 
     def create_project(self, namespace: str, name: str) -> Project:
         """Create, persist, and activate a new project.
@@ -50,7 +63,8 @@ class ProjectService:
 
         project = Project(namespace=normalized_namespace, mod_id=mod_id, name=name)
         self._project_repository.create(project)
-        self._project = project
+        self._project_registry.add_project(project)
+        self._active_project = project
 
         return project
 
@@ -60,20 +74,9 @@ class ProjectService:
         :param qualified_id: Namespace-qualified project identifier.
         :returns: Loaded project.
         """
-        project = self._project_repository.load(qualified_id)
+        self._active_project = self._load_project(qualified_id)
 
-        project.materials = self._material_repository.load_all(project)
-
-        localization_data = self._localization_repository.load_all(project)
-        self._load_material_localizations(project, localization_data)
-
-        self._project = project
-
-        return project
-
-    def list_projects(self) -> list[Project]:
-        """Return all available projects."""
-        return self._project_repository.list_projects()
+        return self._require_active_project()
 
     def list_project_qualified_ids(self) -> list[str]:
         """Return a sorted list of qualified identifiers of all available projects."""
@@ -89,7 +92,45 @@ class ProjectService:
 
     def close_project(self) -> None:
         """Close the currently active project."""
-        self._project = None
+        self._active_project = None
+
+    def add_content(self, content_type: ContentType, content: Content[Any]) -> None:
+        """Add content to the active project and registry.
+
+        :param content_type: Type of content to add.
+        :param content: Content to add.
+        """
+        project = self._require_active_project()
+        project.content[content_type].append(content)
+
+        reference = ContentReference(
+            content_type=content_type,
+            qualified_id=content.get_qualified_id(project.qualified_id),
+        )
+
+        if reference.qualified_id is not None and self._project_registry.has_content_reference(
+            content_type,
+            reference.qualified_id,
+        ):
+            raise ValueError(f"Content with ID '{content.id}' already exists.")
+
+        self._project_registry.add_content_reference(reference)
+
+    def remove_content(self, content_type: ContentType, content: Content[Any]) -> None:
+        """Remove content from the active project and registry.
+
+        :param content_type: Type of content to remove.
+        :param content: Content to remove.
+        """
+        project = self._require_active_project()
+
+        reference = ContentReference(
+            content_type=content_type,
+            qualified_id=content.get_qualified_id(project.qualified_id),
+        )
+
+        project.content[content_type].remove(content)
+        self._project_registry.remove_content_reference(reference)
 
     def _require_active_project(self) -> Project:
         """Return the active project.
@@ -97,20 +138,22 @@ class ProjectService:
         :returns: Currently active project.
         :raises RuntimeError: If no project is currently active.
         """
-        if self._project is None:
-            raise RuntimeError("No active project.")
+        if self._active_project is None:
+            raise RuntimeError("No project is currently active.")
 
-        return self._project
+        return self._active_project
 
     def _save_materials(self, project: Project) -> None:
         """Synchronize project materials with persistent storage.
 
         :param project: Project whose materials should be saved.
         """
-        existing_material_ids = set(self._material_repository.list_material_ids(project))
-        current_material_ids = {material.id for material in project.materials}
+        materials = cast(list[Material], project.content[ContentType.MATERIALS])
 
-        for material in project.materials:
+        existing_material_ids = set(self._material_repository.list_material_ids(project))
+        current_material_ids = {material.id for material in materials}
+
+        for material in materials:
             self._material_repository.save(project, material)
 
         deleted_material_ids = existing_material_ids - current_material_ids
@@ -125,7 +168,7 @@ class ProjectService:
         """
         localization_data: dict[str, dict[str, str]] = defaultdict(dict)
 
-        for material in project.materials:
+        for material in project.content[ContentType.MATERIALS]:
             prefix = f"config.{material.id}"
 
             for language, localization in material.localizations.items():
@@ -147,6 +190,31 @@ class ProjectService:
         for language in deleted_languages:
             self._localization_repository.delete(project, language)
 
+    def _load_all_projects(self) -> list[Project]:
+        """Load all available projects from persistent storage."""
+        return [
+            self._load_project(qualified_id)
+            for qualified_id in self._project_repository.list_project_qualified_ids()
+        ]
+
+    def _load_project(self, qualified_id: str) -> Project:
+        """Load a complete project from persistent storage.
+
+        :param qualified_id: Full project identifier.
+        :returns: Loaded project.
+        """
+        project = self._project_repository.load(qualified_id)
+
+        project.content[ContentType.MATERIALS] = cast(
+            list[Content[Any]],
+            self._material_repository.load_all(project),
+        )
+
+        localization_data = self._localization_repository.load_all(project)
+        self._load_material_localizations(project, localization_data)
+
+        return project
+
     @staticmethod
     def _load_material_localizations(
         project: Project,
@@ -154,7 +222,7 @@ class ProjectService:
     ) -> None:
         """Apply localization data to project materials."""
         for language, entries in localization_data.items():
-            for material in project.materials:
+            for material in project.content[ContentType.MATERIALS]:
                 prefix = f"config.{material.id}"
 
                 material.localizations[language] = MaterialLocalization(

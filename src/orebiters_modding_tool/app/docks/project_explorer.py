@@ -26,7 +26,7 @@ class ProjectExplorer(QDockWidget):
         self._model = QStandardItemModel(self)
 
         items_item = self._create_item(
-            "Items",
+            "Items (Coming Soon)",
             content_reference=ContentReference(
                 content_type=ContentType.ITEMS,
             ),
@@ -40,7 +40,7 @@ class ProjectExplorer(QDockWidget):
         )
 
         resources_item = self._create_item(
-            "Resources",
+            "Resources (Coming Soon)",
             content_reference=ContentReference(
                 content_type=ContentType.RESOURCES,
             ),

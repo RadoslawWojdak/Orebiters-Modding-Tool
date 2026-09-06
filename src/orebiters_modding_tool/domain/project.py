@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
+from typing import Any
 
-from orebiters_modding_tool.domain.material import Material
+from orebiters_modding_tool.domain.content import Content, ContentType
 from orebiters_modding_tool.domain.project_identifier import create_qualified_id
 
 
@@ -11,7 +12,9 @@ class Project:
     namespace: str
     mod_id: str
     name: str
-    materials: list[Material] = field(default_factory=list)
+    content: dict[ContentType, list[Content[Any]]] = field(
+        default_factory=lambda: {content_type: [] for content_type in ContentType}
+    )
 
     @property
     def qualified_id(self) -> str:

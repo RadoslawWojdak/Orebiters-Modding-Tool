@@ -1,6 +1,4 @@
-from typing import cast
-
-from PySide6.QtWidgets import QLabel, QLineEdit, QWidget
+from collections.abc import Sequence
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.editor_field import EditorField
@@ -37,8 +35,8 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
         """
         material_references = context["material_references"]
 
-        if not isinstance(material_references, list):
-            raise TypeError("Context value 'material_references' must be a list.")
+        if not isinstance(material_references, Sequence):
+            raise TypeError("Context value 'material_references' must be a sequence.")
 
         if not material_references:
             raise ValueError("Cannot create a material requirement without material references.")
@@ -46,10 +44,6 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
         return MaterialRequirement(material_references[0], 1)
 
     FIELDS = (
-        EditorField(
-            name="id",
-            label="ID",
-        ),
         EditorField(
             name="qualified_id",
             label="Qualified ID:",
@@ -68,35 +62,3 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
             editor_widget_type=MaterialRequirementEditorWidget,
         ),
     )
-
-    def __init__(
-        self,
-        item: Material,
-        context: dict[str, object] | None = None,
-        parent: QWidget | None = None,
-        *,
-        read_only: bool = False,
-    ) -> None:
-        """Initialize the material editor.
-
-        :param item: Material being edited.
-        :param context: Additional data required by editor fields.
-        :param parent: Optional parent widget.
-        :param read_only: Whether the editor is read-only.
-        """
-        super().__init__(item=item, context=context, parent=parent, read_only=read_only)
-
-        self._setup_qualified_id_updates()
-
-    def _setup_qualified_id_updates(self) -> None:
-        """Update the qualified ID when the material ID changes."""
-        if self._read_only:
-            return
-
-        id_field = cast(QLineEdit, self._fields["id"])
-        qualified_id_field = cast(QLabel, self._fields["qualified_id"])
-        mod_id = cast(str, self._context["mod_id"])
-
-        id_field.textChanged.connect(
-            lambda content_id: qualified_id_field.setText(f"{mod_id}.{content_id}")
-        )

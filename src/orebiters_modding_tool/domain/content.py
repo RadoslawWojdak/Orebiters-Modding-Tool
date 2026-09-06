@@ -15,9 +15,9 @@ class ContentType(Enum):
 class ContentLocalization:
     """Localized base content text."""
 
-    one: str
-    few: str
-    many: str
+    one: str = ""
+    few: str = ""
+    many: str = ""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -69,10 +69,10 @@ class Content[TLocalization: ContentLocalization]:
     id: str
     localizations: dict[str, TLocalization]
 
-    def get_qualified_id(self, mod_id: str) -> str:
+    def get_qualified_id(self, mod_qualified_id: str) -> str:
         """Build a fully qualified content ID.
 
-        :param mod_id: ID of the content owner.
+        :param mod_qualified_id: ID of the content owner.
         :returns: Fully qualified content ID.
         """
-        return f"{mod_id}.{self.id}"
+        return f"{mod_qualified_id}.{self.id}"

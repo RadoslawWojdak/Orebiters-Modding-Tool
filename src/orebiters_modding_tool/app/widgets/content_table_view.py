@@ -25,9 +25,7 @@ class ContentTableView(QTableView):
         self.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
         self.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
 
-        self.setEditTriggers(
-            QTableView.EditTrigger.DoubleClicked | QTableView.EditTrigger.EditKeyPressed,
-        )
+        self.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
 
         horizontal_header = self.horizontalHeader()
         horizontal_header.setStretchLastSection(True)

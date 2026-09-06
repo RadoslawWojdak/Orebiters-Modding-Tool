@@ -41,7 +41,7 @@ class MainWindow(QMainWindow):
 
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
-        self._workspace = Workspace(self)
+        self._workspace = Workspace(self._project_service, self)
         self.setCentralWidget(self._workspace)
 
     def _setup_actions(self) -> None:
@@ -81,44 +81,32 @@ class MainWindow(QMainWindow):
             shortcut=QKeySequence.StandardKey.Undo,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_ArrowBack),
         )
+        self._undo_action.setEnabled(False)
         self._redo_action = self._create_action(
             "Redo",
             self._redo,
             shortcut=QKeySequence.StandardKey.Redo,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward),
         )
+        self._redo_action.setEnabled(False)
         self._cut_action = self._create_action(
             "Cut",
             self._cut,
             shortcut=QKeySequence.StandardKey.Cut,
         )
+        self._cut_action.setEnabled(False)
         self._copy_action = self._create_action(
             "Copy",
             self._copy,
             shortcut=QKeySequence.StandardKey.Copy,
         )
+        self._copy_action.setEnabled(False)
         self._paste_action = self._create_action(
             "Paste",
             self._paste,
             shortcut=QKeySequence.StandardKey.Paste,
         )
-        self._add_content_action = self._create_action(
-            "Add Content",
-            self._add_content,
-            shortcut="Ctrl+Shift+N",
-            icon=QIcon(":/icons/add.svg"),
-        )
-        self._delete_selected_content_action = self._create_action(
-            "Delete Selected Content",
-            self._delete_selected_content,
-            shortcut=QKeySequence.StandardKey.Delete,
-            icon=style.standardIcon(QStyle.StandardPixmap.SP_TrashIcon),
-        )
-        self._select_all_content_action = self._create_action(
-            "Select All Content",
-            self._select_all_content,
-            shortcut=QKeySequence.StandardKey.SelectAll,
-        )
+        self._paste_action.setEnabled(False)
 
         # Help Actions
         self._show_documentation_action = self._create_action(
@@ -127,15 +115,18 @@ class MainWindow(QMainWindow):
             shortcut=QKeySequence.StandardKey.HelpContents,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_DialogHelpButton),
         )
+        self._show_documentation_action.setEnabled(False)
         self._show_keyboard_shortcuts_action = self._create_action(
             "Keyboard Shortcuts",
             self._show_keyboard_shortcuts,
         )
+        self._show_keyboard_shortcuts_action.setEnabled(False)
         self._show_about_dialog_action = self._create_action(
             "About",
             self._show_about_dialog,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_MessageBoxInformation),
         )
+        self._show_about_dialog_action.setEnabled(False)
 
     def _setup_menu_bar(self) -> None:
         """Set up the application menu bar."""
@@ -155,10 +146,6 @@ class MainWindow(QMainWindow):
         edit_menu.addAction(self._cut_action)
         edit_menu.addAction(self._copy_action)
         edit_menu.addAction(self._paste_action)
-        edit_menu.addSeparator()
-        edit_menu.addAction(self._add_content_action)
-        edit_menu.addAction(self._delete_selected_content_action)
-        edit_menu.addAction(self._select_all_content_action)
 
         help_menu = menu_bar.addMenu("Help")
         help_menu.addAction(self._show_documentation_action)
@@ -174,9 +161,6 @@ class MainWindow(QMainWindow):
         toolbar.addAction(self._new_action)
         toolbar.addAction(self._open_action)
         toolbar.addAction(self._save_action)
-        toolbar.addSeparator()
-        toolbar.addAction(self._add_content_action)
-        toolbar.addAction(self._delete_selected_content_action)
 
     def _setup_project_explorer(self) -> None:
         """Set up the Project Explorer dock."""
@@ -295,18 +279,6 @@ class MainWindow(QMainWindow):
         """Paste content from the clipboard."""
         pass
 
-    def _add_content(self) -> None:
-        """Add content to the active view."""
-        pass
-
-    def _delete_selected_content(self) -> None:
-        """Delete the selected content."""
-        pass
-
-    def _select_all_content(self) -> None:
-        """Select all available content."""
-        pass
-
     def _show_documentation(self) -> None:
         """Show the application documentation."""
         pass
@@ -324,6 +296,14 @@ class MainWindow(QMainWindow):
 
         :param content_reference: Reference to the selected content.
         """
+        if not self._project_service.has_active_project:
+            QMessageBox.information(
+                self,
+                "No Project Open",
+                "Please open or create a project before accessing content.",
+            )
+            return
+
         self._workspace.open_content(content_reference)
 
     def _set_active_project(self, project: Project) -> None:
@@ -332,7 +312,7 @@ class MainWindow(QMainWindow):
         :param project: Project that became active.
         """
         self.setWindowTitle(f"{project.name} - Orebiters Modding Tool")
-        self._workspace.set_project(project)
+        self._workspace.close_project_tabs()
         self._update_project_actions()
 
     def _update_project_actions(self) -> None:

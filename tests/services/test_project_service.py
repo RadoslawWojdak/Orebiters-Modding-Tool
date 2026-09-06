@@ -1,12 +1,61 @@
 from pathlib import Path
+from typing import cast
 
-from orebiters_modding_tool.domain.material import MaterialRequirement
+from orebiters_modding_tool.domain.content import ContentType
+from orebiters_modding_tool.domain.material import Material, MaterialRequirement
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
 from orebiters_modding_tool.services.project_service import ProjectService
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+
+
+def test_create_project_normalizes_identifiers_and_activates_project(
+    project_service: ProjectService,
+) -> None:
+    """Verify that creating a project normalizes its identifiers and activates it."""
+    project = project_service.create_project(
+        namespace="My Namespace",
+        name="My Mod",
+    )
+
+    assert project.namespace == "my_namespace"
+    assert project.mod_id == "my_mod"
+    assert project_service.active_project is project
+    assert project_service.has_active_project
+
+
+def test_close_project_clears_active_project(project_service: ProjectService) -> None:
+    """Verify that closing a project clears the active project."""
+    project_service.create_project(namespace="test", name="Test Mod")
+
+    project_service.close_project()
+
+    assert project_service.active_project is None
+    assert not project_service.has_active_project
+
+
+def test_get_content_references_returns_references_from_all_projects(
+    project_service: ProjectService,
+) -> None:
+    """Verify that content references include content from all projects."""
+    first_project = project_service.create_project(namespace="test", name="First Mod")
+    first_material = MaterialFactory.create(id="clay")
+    project_service.add_content(ContentType.MATERIALS, first_material)
+    project_service.save_project()
+
+    second_project = project_service.create_project(namespace="test", name="Second Mod")
+    second_material = MaterialFactory.create(id="stone")
+    project_service.add_content(ContentType.MATERIALS, second_material)
+    project_service.save_project()
+
+    references = project_service.get_content_references(ContentType.MATERIALS)
+
+    assert set(references) == {
+        ContentReferenceFactory.from_content(first_material, mod_id=first_project.qualified_id),
+        ContentReferenceFactory.from_content(second_material, mod_id=second_project.qualified_id),
+    }
 
 
 def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
@@ -35,7 +84,8 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
         ],
     )
 
-    project.materials.extend([clay, mud_patch_mix])
+    project_service.add_content(ContentType.MATERIALS, clay)
+    project_service.add_content(ContentType.MATERIALS, mud_patch_mix)
 
     project_service.save_project()
 
@@ -46,11 +96,12 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
     )
 
     reopened_project = reopened_project_service.open_project(project.qualified_id)
+    materials = cast(list[Material], reopened_project.content[ContentType.MATERIALS])
 
-    assert [material.id for material in reopened_project.materials] == ["clay", "mud_patch_mix"]
+    assert [material.id for material in materials] == ["clay", "mud_patch_mix"]
 
     loaded_mud_patch_mix = next(
-        material for material in reopened_project.materials if material.id == "mud_patch_mix"
+        material for material in materials if material.id == "mud_patch_mix"
     )
 
     assert len(loaded_mud_patch_mix.crafting_materials) == 1
