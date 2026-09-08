@@ -8,12 +8,23 @@ class WelcomeWidget(QWidget):
 
     TITLE_TEXT = "Orebiters Modding Tool"
     MESSAGE_TEXT = "Select content from the Project Explorer or create new content to get started."
+    STEAM_LINK_TEXT = "Orebiters on Steam"
+
+    STEAM_URL = (
+        "https://store.steampowered.com/app/4253410/Orebiters/"
+        "?utm_source=orebiters_modding_tool"
+        "&utm_medium=in_app"
+        "&utm_campaign=welcome_screen"
+    )
 
     TITLE_FONT_SIZE = 24
     MESSAGE_FONT_SIZE = 12
+    LINK_FONT_SIZE = 11
     CONTENT_SPACING = 24
+    LINK_SPACING = 12
 
     def __init__(self, parent: QWidget | None = None) -> None:
+        """Initialize the welcome screen."""
         super().__init__(parent)
 
         self._setup_layout()
@@ -26,6 +37,8 @@ class WelcomeWidget(QWidget):
         layout.addWidget(self._create_title_label())
         layout.addSpacing(self.CONTENT_SPACING)
         layout.addWidget(self._create_message_label())
+        layout.addSpacing(self.LINK_SPACING)
+        layout.addWidget(self._create_steam_link())
         layout.addStretch()
 
     def _create_title_label(self) -> QLabel:
@@ -59,3 +72,22 @@ class WelcomeWidget(QWidget):
         message_label.setFont(font)
 
         return message_label
+
+    def _create_steam_link(self) -> QLabel:
+        """Create the Steam link label.
+
+        :returns: Configured Steam link label.
+        """
+        link_label = QLabel(self.STEAM_LINK_TEXT, self)
+        link_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        link_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextBrowserInteraction)
+        link_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        link_label.setOpenExternalLinks(True)
+        link_label.setText(f'<a href="{self.STEAM_URL}">{self.STEAM_LINK_TEXT}</a>')
+
+        font = QFont(link_label.font())
+        font.setPointSize(self.LINK_FONT_SIZE)
+
+        link_label.setFont(font)
+
+        return link_label
