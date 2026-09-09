@@ -1,5 +1,4 @@
-from collections.abc import Mapping
-from types import MappingProxyType
+from collections.abc import Sequence
 
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.project import Project
@@ -23,20 +22,35 @@ class ProjectRegistry:
 
     @property
     def projects(self) -> tuple[Project, ...]:
+        """Return all registered projects."""
         return tuple(self._projects)
 
-    @property
-    def project_references(self) -> Mapping[ContentType, tuple[ContentReference, ...]]:
-        """Return references to content from all projects.
+    def get_content_references(self, content_type: ContentType) -> Sequence[ContentReference]:
+        """Return independent references to content of the specified type.
 
-        :returns: Content references grouped by content type.
+        :param content_type: Type of content to retrieve.
+        :returns: Independent references to the requested content.
         """
-        return MappingProxyType(
-            {
-                content_type: tuple(references)
-                for content_type, references in self._project_references.items()
-            }
+        return tuple(
+            ContentReference(
+                content_type=reference.content_type,
+                qualified_id=reference.qualified_id,
+            )
+            for reference in self._project_references[content_type]
         )
+
+    def get_project(self, qualified_id: str) -> Project:
+        """Return the project with the specified qualified ID.
+
+        :param qualified_id: Qualified project ID.
+        :returns: Matching project.
+        :raises ValueError: If no matching project exists.
+        """
+        for project in self._projects:
+            if project.qualified_id == qualified_id:
+                return project
+
+        raise ValueError(f"Project not found: {qualified_id}.")
 
     def add_project(self, project: Project) -> None:
         """Add a project to the registry.
@@ -66,35 +80,36 @@ class ProjectRegistry:
             for reference in self._project_references[content_type]
         )
 
-    def add_content_reference(self, reference: ContentReference) -> None:
-        """Add a content reference to the registry.
+    def add_content_reference(self, content_type: ContentType, qualified_id: str) -> None:
+        """Register a content reference.
 
-        :param reference: Reference to add.
+        :param content_type: Type of content.
+        :param qualified_id: Qualified content ID.
         """
-        self._project_references[reference.content_type].append(reference)
+        reference = ContentReference(content_type=content_type, qualified_id=qualified_id)
+        self._project_references[content_type].append(reference)
 
-    def remove_content_reference(self, reference: ContentReference) -> None:
-        """Remove a content reference from the registry.
+    def remove_content_reference(self, content_type: ContentType, qualified_id: str) -> None:
+        """Unregister a content reference.
 
-        :param reference: Reference to remove.
+        :param content_type: Type of content.
+        :param qualified_id: Qualified content ID.
         """
-        self._project_references[reference.content_type].remove(reference)
+        reference = ContentReference(content_type=content_type, qualified_id=qualified_id)
+        self._project_references[content_type].remove(reference)
 
     def _add_project_references(self, project: Project) -> None:
-        """Add references to all content belonging to a project.
+        """Register references to all content belonging to a project.
 
         :param project: Project whose content should be indexed.
         """
         for content_type, items in project.content.items():
             for item in items:
-                reference = ContentReference(
-                    content_type=content_type,
-                    qualified_id=item.get_qualified_id(project.qualified_id),
-                )
-                self.add_content_reference(reference)
+                qualified_id = item.get_qualified_id(project.qualified_id)
+                self.add_content_reference(content_type, qualified_id)
 
     def _remove_project_references(self, project: Project) -> None:
-        """Remove references to all content belonging to a project.
+        """Unregister references to all content belonging to a project.
 
         :param project: Project whose content should be removed.
         """

@@ -1,4 +1,5 @@
 from collections import defaultdict
+from collections.abc import Sequence
 from typing import Any, cast
 
 from orebiters_modding_tool.domain.content import Content, ContentReference, ContentType
@@ -43,13 +44,13 @@ class ProjectService:
         """Return whether a project is currently active."""
         return self._active_project is not None
 
-    def get_content_references(self, content_type: ContentType) -> tuple[ContentReference, ...]:
+    def get_content_references(self, content_type: ContentType) -> Sequence[ContentReference]:
         """Return references to content of the specified type.
 
         :param content_type: Type of content to retrieve.
         :returns: References to the requested content.
         """
-        return self._project_registry.project_references.get(content_type, ())
+        return self._project_registry.get_content_references(content_type)
 
     def create_project(self, namespace: str, name: str) -> Project:
         """Create, persist, and activate a new project.
@@ -69,14 +70,13 @@ class ProjectService:
         return project
 
     def open_project(self, qualified_id: str) -> Project:
-        """Load and activate an existing project.
+        """Set the active project.
 
         :param qualified_id: Namespace-qualified project identifier.
-        :returns: Loaded project.
+        :returns: Opened project.
         """
-        self._active_project = self._load_project(qualified_id)
-
-        return self._require_active_project()
+        self._active_project = self._project_registry.get_project(qualified_id)
+        return self._active_project
 
     def list_project_qualified_ids(self) -> list[str]:
         """Return a sorted list of qualified identifiers of all available projects."""
@@ -101,20 +101,16 @@ class ProjectService:
         :param content: Content to add.
         """
         project = self._require_active_project()
-        project.content[content_type].append(content)
 
-        reference = ContentReference(
-            content_type=content_type,
-            qualified_id=content.get_qualified_id(project.qualified_id),
-        )
+        qualified_id = content.get_qualified_id(project.qualified_id)
 
-        if reference.qualified_id is not None and self._project_registry.has_content_reference(
-            content_type,
-            reference.qualified_id,
+        if qualified_id is not None and self._project_registry.has_content_reference(
+            content_type, qualified_id
         ):
             raise ValueError(f"Content with ID '{content.id}' already exists.")
 
-        self._project_registry.add_content_reference(reference)
+        project.content[content_type].append(content)
+        self._project_registry.add_content_reference(content_type, qualified_id)
 
     def remove_content(self, content_type: ContentType, content: Content[Any]) -> None:
         """Remove content from the active project and registry.
@@ -124,13 +120,10 @@ class ProjectService:
         """
         project = self._require_active_project()
 
-        reference = ContentReference(
-            content_type=content_type,
-            qualified_id=content.get_qualified_id(project.qualified_id),
-        )
+        qualified_id = content.get_qualified_id(project.qualified_id)
 
         project.content[content_type].remove(content)
-        self._project_registry.remove_content_reference(reference)
+        self._project_registry.remove_content_reference(content_type, qualified_id)
 
     def _require_active_project(self) -> Project:
         """Return the active project.

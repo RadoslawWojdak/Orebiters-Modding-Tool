@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.editor_field import EditorField
 from orebiters_modding_tool.app.widgets.dictionary_widget import DictionaryWidget
+from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 
 
@@ -97,7 +98,7 @@ class ChoiceEditorWidget(BaseEditorWidget[SampleItem]):
         EditorField(
             name="text",
             label="Text",
-            choices_provider=lambda _editor: ("first", "second", "third"),
+            choices_provider=lambda _editor, _current_value: ("first", "second", "third"),
             choice_formatter=lambda choice: str(choice).upper(),
         ),
     )
@@ -316,7 +317,7 @@ def test_creates_choice_field(qapp: object) -> None:
 
     field = editor._fields["text"]
 
-    assert isinstance(field, QComboBox)
+    assert isinstance(field, DynamicComboBox)
 
     assert field.count() == 3
     assert field.currentData() == "second"
@@ -669,7 +670,12 @@ def test_save_updates_choice_field_value(qapp: object) -> None:
 
     field = editor._fields["text"]
 
-    assert isinstance(field, QComboBox)
+    assert isinstance(field, DynamicComboBox)
+
+    field.showPopup()
+    field.hidePopup()
+
+    assert field.count() == 3
 
     field.setCurrentIndex(2)
 
@@ -851,3 +857,52 @@ def test_nested_dictionary_editor_does_not_show_save_button(qapp: object) -> Non
 
     assert isinstance(nested_editor, EmptyEditorWidget)
     assert not hasattr(nested_editor, "_save_button")
+
+
+def test_refresh_recursively_refreshes_nested_editors(qapp: object) -> None:
+    """Refresh nested editors recursively."""
+    root_can_add = Mock(return_value=False)
+    nested_can_add = Mock(return_value=False)
+
+    class NestedEditor(BaseEditorWidget[SampleItem]):
+        FIELDS = (
+            EditorField(
+                name="values",
+                label="Values",
+                item_factory=lambda _context: "new value",
+                can_add_provider=nested_can_add,
+            ),
+        )
+
+    class RootEditor(BaseEditorWidget[SampleItem]):
+        FIELDS = (
+            EditorField(
+                name="values",
+                label="Values",
+                item_factory=lambda _context: SampleItem(),
+                editor_widget_type=NestedEditor,
+                can_add_provider=root_can_add,
+            ),
+        )
+
+    root = RootEditor(SampleItem(values=[SampleItem()]))
+
+    root_list = root._fields["values"]
+    assert isinstance(root_list, ListWidget)
+
+    nested_editor = root_list.item_at(0)
+    assert isinstance(nested_editor, NestedEditor)
+
+    nested_list = nested_editor._fields["values"]
+    assert isinstance(nested_list, ListWidget)
+
+    assert not root_list._add_button.isEnabled()
+    assert not nested_list._add_button.isEnabled()
+
+    root_can_add.return_value = True
+    nested_can_add.return_value = True
+
+    root.refresh()
+
+    assert root_list._add_button.isEnabled()
+    assert nested_list._add_button.isEnabled()

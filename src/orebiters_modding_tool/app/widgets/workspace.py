@@ -47,6 +47,7 @@ class Workspace(QWidget):
         self._tab_widget = QTabWidget(self)
         self._tab_widget.setTabsClosable(True)
         self._tab_widget.tabCloseRequested.connect(self._close_tab)
+        self._tab_widget.currentChanged.connect(self._refresh_current_tab)
 
         self._layout.addWidget(self._tab_widget)
 
@@ -271,8 +272,8 @@ class Workspace(QWidget):
 
         return {
             "mod_id": active_project.qualified_id,
-            "material_references": self._project_service.get_content_references(
-                ContentType.MATERIALS
+            "material_references_provider": (
+                lambda: self._project_service.get_content_references(ContentType.MATERIALS)
             ),
         }
 
@@ -314,6 +315,13 @@ class Workspace(QWidget):
                 return row
 
         return None
+
+    def _refresh_current_tab(self, index: int) -> None:
+        """Refresh the currently active tab."""
+        widget = self._tab_widget.widget(index)
+
+        if isinstance(widget, BaseEditorWidget):
+            widget.refresh()
 
     def _find_content_tab(self, content_reference: ContentReference) -> int | None:
         """Find an open tab for the specified content.
