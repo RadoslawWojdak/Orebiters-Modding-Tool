@@ -109,3 +109,21 @@ def test_close_project_tabs_closes_project_tabs_and_keeps_welcome(
 
     assert workspace._tab_widget.count() == 1
     assert workspace._tab_widget.tabText(0) == "Welcome"
+
+
+def test_switching_to_editor_tab_refreshes_editor(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Refresh the editor when switching to its tab."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    editor = workspace._tab_widget.currentWidget()
+    assert isinstance(editor, BaseEditorWidget)
+
+    with patch.object(editor, "refresh") as refresh:
+        workspace._tab_widget.setCurrentIndex(0)
+        workspace._tab_widget.setCurrentWidget(editor)
+
+    refresh.assert_called_once()

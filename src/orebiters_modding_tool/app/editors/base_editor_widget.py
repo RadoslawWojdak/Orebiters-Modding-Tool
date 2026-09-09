@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from enum import Enum
 
 from PySide6.QtCore import Qt
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from orebiters_modding_tool.app.editors.editor_field import EditorField
 from orebiters_modding_tool.app.widgets.dictionary_widget import DictionaryWidget
+from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 
 
@@ -68,6 +70,11 @@ class BaseEditorWidget[T](QWidget):
         """Save all editable field values to the edited item."""
         for field_config in self.FIELDS:
             self._save_field(field_config)
+
+    def refresh(self) -> None:
+        """Refresh this editor and its nested editors."""
+        for field in self._fields.values():
+            self._refresh_field(field)
 
     # =========================================================================
     # Setup
@@ -224,27 +231,30 @@ class BaseEditorWidget[T](QWidget):
 
         return field
 
-    def _create_choice_field(self, field_config: EditorField, value: object) -> QComboBox:
+    def _create_choice_field(
+        self,
+        field_config: EditorField,
+        value: object,
+    ) -> DynamicComboBox[object]:
         """Create an editor for a predefined set of choices.
 
         :param field_config: Configuration of the field.
         :param value: Currently selected value.
         :returns: Configured choice editor.
+        :raises ValueError: If no choices provider is configured.
         """
-        if field_config.choices_provider is None:
+        choices_provider = field_config.choices_provider
+
+        if choices_provider is None:
             raise ValueError(f"Choice field '{field_config.name}' requires a choices provider.")
 
-        choices = field_config.choices_provider(self)
+        field = DynamicComboBox(
+            choices_provider=lambda current_value: choices_provider(self, current_value),
+            choice_formatter=field_config.choice_formatter,
+            parent=self,
+        )
 
-        field = QComboBox(self)
-
-        for choice in choices:
-            field.addItem(field_config.choice_formatter(choice), choice)
-
-        current_index = field.findData(value)
-
-        if current_index >= 0:
-            field.setCurrentIndex(current_index)
+        field.setCurrentIndex(field.find_data_equal(value))
 
         return field
 
@@ -343,8 +353,14 @@ class BaseEditorWidget[T](QWidget):
             item_widget_factory=lambda value: self._create_list_item_field(field_config, value),
             values=values,
             parent=self,
-            can_add=not read_only,
-            can_remove=not read_only,
+            can_add_provider=self._get_operation_provider(
+                field_config.can_add_provider,
+                read_only,
+            ),
+            can_remove_provider=self._get_operation_provider(
+                field_config.can_remove_provider,
+                read_only,
+            ),
         )
 
     def _create_list_item_field(self, field_config: EditorField, value: object) -> QWidget:
@@ -483,3 +499,31 @@ class BaseEditorWidget[T](QWidget):
             return field.currentData()
 
         raise ValueError(f"Unsupported editor widget type: {type(field).__name__}.")
+
+    # =========================================================================
+    # Helpers
+    # =========================================================================
+
+    def _get_operation_provider(
+        self,
+        provider: Callable[..., bool] | None,
+        read_only: bool,
+    ) -> Callable[[], bool] | None:
+        """Create a bound operation provider."""
+        if read_only:
+            return lambda: False
+        if provider is None:
+            return None
+        return lambda: provider(self)
+
+    def _refresh_field(self, field: QWidget) -> None:
+        """Refresh a field and its nested editors."""
+        if isinstance(field, BaseEditorWidget):
+            field.refresh()
+            return
+
+        if isinstance(field, ListWidget):
+            field.refresh()
+
+            for index in range(field.item_count()):
+                self._refresh_field(field.item_at(index))

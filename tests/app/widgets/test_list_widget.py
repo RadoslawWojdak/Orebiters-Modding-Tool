@@ -5,141 +5,189 @@ from PySide6.QtWidgets import QLabel, QPushButton
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 
 
-class TestListWidget:
-    """Tests for ListWidget."""
+def test_creates_widgets_for_initial_values(qapp: object) -> None:
+    """Create a widget for every initial value."""
+    item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
 
-    def test_creates_widgets_for_initial_values(self, qapp: object) -> None:
-        """Create a widget for every initial value."""
-        item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=item_widget_factory,
+        values=["first", "second"],
+    )
 
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=item_widget_factory,
-            values=["first", "second"],
-        )
+    assert len(widget._item_widgets) == 2
+    item_widget_factory.assert_any_call("first")
+    item_widget_factory.assert_any_call("second")
 
-        assert len(widget._item_widgets) == 2
-        item_widget_factory.assert_any_call("first")
-        item_widget_factory.assert_any_call("second")
 
-    def test_shows_add_button(self, qapp: object) -> None:
-        """Show the add button when can_add is enabled."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=[],
-        )
+def test_enables_add_button_by_default(qapp: object) -> None:
+    """Enable the add button by default."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=[],
+    )
 
-        assert not widget._add_button.isHidden()
+    assert widget._add_button.isEnabled()
 
-    def test_shows_remove_buttons(self, qapp: object) -> None:
-        """Show remove buttons when can_remove is enabled."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=["first", "second"],
-        )
 
-        remove_buttons = [
-            button for button in widget.findChildren(QPushButton) if button.text() == "Delete"
-        ]
+def test_enables_remove_buttons_by_default(qapp: object) -> None:
+    """Enable remove buttons by default."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=["first", "second"],
+    )
 
-        assert len(remove_buttons) == 2
-        assert all(not button.isHidden() for button in remove_buttons)
+    remove_buttons = [
+        button for button in widget.findChildren(QPushButton) if button.text() == "Delete"
+    ]
 
-    def test_add_item_creates_new_item(self, qapp: object) -> None:
-        """Create and add a new item using the configured factory."""
-        item_factory = Mock(return_value="new value")
-        item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
+    assert len(remove_buttons) == 2
+    assert all(button.isEnabled() for button in remove_buttons)
 
-        widget = ListWidget(
-            item_factory=item_factory,
-            item_widget_factory=item_widget_factory,
-            values=[],
-        )
 
-        widget._add_item()
+def test_add_item_creates_new_item(qapp: object) -> None:
+    """Create and add a new item using the configured factory."""
+    item_factory = Mock(return_value="new value")
+    item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
 
-        assert len(widget._item_widgets) == 1
-        item_factory.assert_called_once_with()
-        item_widget_factory.assert_called_once_with("new value")
+    widget = ListWidget(
+        item_factory=item_factory,
+        item_widget_factory=item_widget_factory,
+        values=[],
+    )
 
-    def test_remove_item_removes_widget(self, qapp: object) -> None:
-        """Remove an existing item widget."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=["first"],
-        )
+    widget._add_item()
 
-        item_widget = widget._item_widgets[0]
-        row_widget = widget._items_layout.itemAt(0).widget()
+    assert len(widget._item_widgets) == 1
+    item_factory.assert_called_once_with()
+    item_widget_factory.assert_called_once_with("new value")
 
-        assert row_widget is not None
 
-        widget._remove_item(row_widget, item_widget)
+def test_remove_item_removes_widget(qapp: object) -> None:
+    """Remove an existing item widget."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=["first"],
+    )
 
-        assert widget._item_widgets == []
-        assert widget._items_layout.count() == 0
+    item_widget = widget._item_widgets[0]
+    row_widget = widget._items_layout.itemAt(0).widget()
 
-    def test_disabled_can_add_hides_add_button(self, qapp: object) -> None:
-        """Hide the add button when the list has disabled can_add flag."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=[],
-            can_add=False,
-        )
+    assert row_widget is not None
 
-        assert widget._add_button.isHidden()
+    widget._remove_item(row_widget, item_widget)
 
-    def test_disabled_can_remove_hides_remove_buttons(self, qapp: object) -> None:
-        """Hide remove buttons when the list has disabled can_remove flag."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=["first", "second"],
-            can_remove=False,
-        )
+    assert widget._item_widgets == []
+    assert widget._items_layout.count() == 0
 
-        remove_buttons = [
-            button for button in widget.findChildren(QPushButton) if button.text() == "Delete"
-        ]
 
-        assert len(remove_buttons) == 2
-        assert all(button.isHidden() for button in remove_buttons)
+def test_disables_add_button_when_provider_returns_false(qapp: object) -> None:
+    """Disable the add button when the provider returns false."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=[],
+        can_add_provider=lambda: False,
+    )
 
-    def test_disabled_can_add_does_not_add_item(self, qapp: object) -> None:
-        """Do not add items when the list has disabled can_add flag."""
-        item_factory = Mock(return_value="new value")
+    assert not widget._add_button.isEnabled()
 
-        widget = ListWidget(
-            item_factory=item_factory,
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=[],
-            can_add=False,
-        )
 
-        widget._add_item()
+def test_disables_remove_buttons_when_provider_returns_false(qapp: object) -> None:
+    """Disable remove buttons when the provider returns false."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=["first", "second"],
+        can_remove_provider=lambda: False,
+    )
 
-        assert widget._item_widgets == []
-        item_factory.assert_not_called()
+    remove_buttons = [
+        button for button in widget.findChildren(QPushButton) if button.text() == "Delete"
+    ]
 
-    def test_disabled_can_remove_does_not_remove_item(self, qapp: object) -> None:
-        """Do not remove items when the list has disabled can_remove flag."""
-        widget = ListWidget(
-            item_factory=lambda: "new value",
-            item_widget_factory=lambda value: QLabel(str(value)),
-            values=["first"],
-            can_remove=False,
-        )
+    assert len(remove_buttons) == 2
+    assert all(not button.isEnabled() for button in remove_buttons)
 
-        item_widget = widget._item_widgets[0]
-        row_widget = widget._items_layout.itemAt(0).widget()
 
-        assert row_widget is not None
+def test_add_item_does_not_add_when_add_provider_returns_false(qapp: object) -> None:
+    """Do not add an item when the provider returns false."""
+    item_factory = Mock(return_value="new value")
 
-        widget._remove_item(row_widget, item_widget)
+    widget = ListWidget(
+        item_factory=item_factory,
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=[],
+        can_add_provider=lambda: False,
+    )
 
-        assert widget._item_widgets == [item_widget]
-        assert widget._items_layout.count() == 1
+    widget._add_item()
+
+    assert widget._item_widgets == []
+    item_factory.assert_not_called()
+
+
+def test_remove_item_does_not_remove_when_remove_provider_returns_false(qapp: object) -> None:
+    """Do not remove an item when the provider returns false."""
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=["first"],
+        can_remove_provider=lambda: False,
+    )
+
+    item_widget = widget._item_widgets[0]
+    row_widget = widget._items_layout.itemAt(0).widget()
+
+    assert row_widget is not None
+
+    widget._remove_item(row_widget, item_widget)
+
+    assert widget._item_widgets == [item_widget]
+    assert widget._items_layout.count() == 1
+
+
+def test_refresh_updates_add_button(qapp: object) -> None:
+    """Refresh the add button state."""
+    can_add = True
+
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=[],
+        can_add_provider=lambda: can_add,
+    )
+
+    assert widget._add_button.isEnabled()
+
+    can_add = False
+    widget.refresh()
+
+    assert not widget._add_button.isEnabled()
+
+
+def test_refresh_updates_remove_button(qapp: object) -> None:
+    """Refresh the remove button state."""
+    can_remove = True
+
+    widget = ListWidget(
+        item_factory=lambda: "new value",
+        item_widget_factory=lambda value: QLabel(str(value)),
+        values=["first", "second"],
+        can_remove_provider=lambda: can_remove,
+    )
+
+    remove_buttons = [
+        button for button in widget.findChildren(QPushButton) if button.text() == "Delete"
+    ]
+
+    assert len(remove_buttons) == 2
+    assert all(button.isEnabled() for button in remove_buttons)
+
+    can_remove = False
+    widget.refresh()
+
+    assert all(not button.isEnabled() for button in remove_buttons)
