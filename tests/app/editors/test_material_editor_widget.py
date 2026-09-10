@@ -1,6 +1,6 @@
 import pytest
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.editors.material_requirement_editor_widget import (
@@ -8,12 +8,13 @@ from orebiters_modding_tool.app.editors.material_requirement_editor_widget impor
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
+from orebiters_modding_tool.domain.content import ContentReference
 from orebiters_modding_tool.domain.material import MaterialRequirement
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
 
 
-def test_displays_qualified_id(qapp: object) -> None:
+def test_displays_qualified_id(qapp: QApplication) -> None:
     """Display the qualified material ID."""
     material = MaterialFactory.create(id="iron")
 
@@ -31,7 +32,19 @@ def test_displays_qualified_id(qapp: object) -> None:
     assert qualified_id_field.text() == "orebiters.core.iron"
 
 
-def test_create_material_requirement_uses_first_available_reference(qapp: object) -> None:
+def test_get_qualified_id_raises_when_mod_id_is_not_string(qapp: QApplication) -> None:
+    """Raise an error when the mod ID is not a string."""
+    with pytest.raises(TypeError, match="Context value 'mod_id' must be a string."):
+        MaterialEditorWidget(
+            MaterialFactory.create(id="iron"),
+            context={
+                "mod_id": 123,
+                "material_references_provider": lambda: [],
+            },
+        )
+
+
+def test_create_material_requirement_uses_first_available_reference(qapp: QApplication) -> None:
     """Create a material requirement using the first available reference."""
     current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
     first_available_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
@@ -53,7 +66,21 @@ def test_create_material_requirement_uses_first_available_reference(qapp: object
     assert requirement.amount == 1
 
 
-def test_create_material_requirement_raises_without_available_references(qapp: object) -> None:
+def test_create_material_requirement_allows_reference_without_excluded_provider(
+    qapp: QApplication,
+) -> None:
+    """Create a material requirement without an exclusion provider."""
+    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    requirement = MaterialEditorWidget._create_material_requirement(
+        {"material_references_provider": lambda: [reference]},
+    )
+
+    assert requirement == MaterialRequirement(reference, 1)
+
+
+def test_create_material_requirement_raises_without_available_references(
+    qapp: QApplication,
+) -> None:
     """Raise an error when no material references are available."""
     reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
 
@@ -69,7 +96,7 @@ def test_create_material_requirement_raises_without_available_references(qapp: o
         )
 
 
-def test_material_requirement_excludes_current_material(qapp: object) -> None:
+def test_material_requirement_excludes_current_material(qapp: QApplication) -> None:
     """Exclude the edited material from material requirement choices."""
     material = MaterialFactory.create(id="iron")
     other_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
@@ -106,7 +133,7 @@ def test_material_requirement_excludes_current_material(qapp: object) -> None:
     assert other_reference in choices
 
 
-def test_material_requirement_excludes_already_used_materials(qapp: object) -> None:
+def test_material_requirement_excludes_already_used_materials(qapp: QApplication) -> None:
     """Exclude materials already used in another crafting requirement."""
     used_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
     available_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
@@ -162,7 +189,7 @@ def test_material_requirement_excludes_already_used_materials(qapp: object) -> N
     assert available_reference in choices
 
 
-def test_material_requirement_keeps_its_current_material_available(qapp: object) -> None:
+def test_material_requirement_keeps_its_current_material_available(qapp: QApplication) -> None:
     """Keep the current material available when refreshing its choices."""
     current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
     other_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
@@ -208,7 +235,73 @@ def test_material_requirement_keeps_its_current_material_available(qapp: object)
     assert other_reference in choices
 
 
-def test_get_used_material_references_returns_current_values(qapp: object) -> None:
+def test_removed_material_requirement_makes_reference_available_again(qapp: QApplication) -> None:
+    """Make a material reference available again after removing its requirement."""
+    used_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    available_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
+
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [
+                ContentReferenceFactory.create(qualified_id="orebiters.core.iron"),
+                used_reference,
+                available_reference,
+            ],
+        },
+    )
+
+    crafting_materials = editor._fields["crafting_materials"]
+
+    assert isinstance(crafting_materials, ListWidget)
+
+    crafting_materials._add_item()
+
+    first_item = crafting_materials.item_at(0)
+    assert isinstance(first_item, MaterialRequirementEditorWidget)
+
+    first_material_field = first_item._fields["material"]
+    assert isinstance(first_material_field, DynamicComboBox)
+
+    first_material_field.setCurrentIndex(first_material_field.find_data_equal(used_reference))
+
+    crafting_materials._add_item()
+
+    assert crafting_materials.item_count() == 2
+
+    second_item = crafting_materials.item_at(1)
+    assert isinstance(second_item, MaterialRequirementEditorWidget)
+
+    second_material_field = second_item._fields["material"]
+    assert isinstance(second_material_field, DynamicComboBox)
+
+    second_material_field.showPopup()
+    second_material_field.hidePopup()
+
+    choices = [
+        second_material_field.itemData(index) for index in range(second_material_field.count())
+    ]
+
+    assert used_reference not in choices
+    assert available_reference in choices
+
+    crafting_materials._remove_buttons[0].click()
+
+    assert crafting_materials.item_count() == 1
+
+    second_material_field.showPopup()
+    second_material_field.hidePopup()
+
+    choices = [
+        second_material_field.itemData(index) for index in range(second_material_field.count())
+    ]
+
+    assert used_reference in choices
+    assert available_reference in choices
+
+
+def test_get_used_material_references_returns_current_values(qapp: QApplication) -> None:
     """Return material references currently used in crafting materials."""
     first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
     second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
@@ -219,10 +312,7 @@ def test_get_used_material_references_returns_current_values(qapp: object) -> No
         material,
         context={
             "mod_id": "orebiters.core",
-            "material_references_provider": lambda: [
-                first_reference,
-                second_reference,
-            ],
+            "material_references_provider": lambda: [first_reference, second_reference],
         },
     )
 
@@ -253,9 +343,117 @@ def test_get_used_material_references_returns_current_values(qapp: object) -> No
     assert editor._get_used_material_references() == (first_reference, second_reference)
 
 
-def test_refresh_uses_updated_material_references(qapp: object) -> None:
+def test_get_used_material_references_returns_empty_without_crafting_materials_field(
+    qapp: QApplication,
+) -> None:
+    """Return no used references when the crafting materials field is missing."""
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [],
+        },
+    )
+
+    editor._fields.pop("crafting_materials")
+
+    assert editor._get_used_material_references() == ()
+
+
+def test_get_used_material_references_raises_for_invalid_item_widget(qapp: QApplication) -> None:
+    """Raise an error when a crafting material item has an invalid widget type."""
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [],
+        },
+    )
+
+    crafting_materials = editor._fields["crafting_materials"]
+
+    assert isinstance(crafting_materials, ListWidget)
+
+    crafting_materials._item_widgets.append(QWidget())
+
+    with pytest.raises(
+        TypeError,
+        match="Crafting material item must be a MaterialRequirementEditorWidget.",
+    ):
+        editor._get_used_material_references()
+
+
+def test_get_used_material_references_raises_for_invalid_material_field(qapp: QApplication) -> None:
+    """Raise an error when a material field has an invalid widget type."""
+    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [reference],
+        },
+    )
+
+    crafting_materials = editor._fields["crafting_materials"]
+
+    assert isinstance(crafting_materials, ListWidget)
+
+    crafting_materials._add_item()
+
+    item_widget = crafting_materials.item_at(0)
+
+    assert isinstance(item_widget, MaterialRequirementEditorWidget)
+
+    item_widget._fields["material"] = QWidget()
+
+    with pytest.raises(
+        TypeError,
+        match="Material field must be a DynamicComboBox.",
+    ):
+        editor._get_used_material_references()
+
+
+def test_can_add_material_requirement_returns_false_when_no_reference_is_available(
+    qapp: QApplication,
+) -> None:
+    """Prevent adding a requirement when every reference is excluded."""
+    current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [current_reference],
+        },
+    )
+
+    assert not editor._can_add_material_requirement()
+
+
+def test_can_add_material_requirement_returns_true_when_reference_is_available(
+    qapp: QApplication,
+) -> None:
+    """Allow adding a requirement when an unused reference is available."""
+    current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    available_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+
+    editor = MaterialEditorWidget(
+        MaterialFactory.create(id="iron"),
+        context={
+            "mod_id": "orebiters.core",
+            "material_references_provider": lambda: [
+                current_reference,
+                available_reference,
+            ],
+        },
+    )
+
+    assert editor._can_add_material_requirement()
+
+
+def test_refresh_uses_updated_material_references(qapp: QApplication) -> None:
     """Refresh the editor using current material references."""
-    references: list = []
+    references: list[ContentReference] = []
 
     editor = MaterialEditorWidget(
         MaterialFactory.create(id="iron"),
@@ -277,7 +475,26 @@ def test_refresh_uses_updated_material_references(qapp: object) -> None:
     assert crafting_materials._add_button.isEnabled()
 
 
-def test_read_only_disables_adding_material_requirements(qapp: object) -> None:
+def test_get_registered_material_references_raises_without_provider(qapp: QApplication) -> None:
+    """Raise an error when no material references provider is configured."""
+    with pytest.raises(
+        TypeError,
+        match="Context value 'material_references_provider' must be callable.",
+    ):
+        MaterialEditorWidget._get_registered_material_references({})
+
+
+def test_get_registered_material_references_raises_when_provider_returns_invalid_value(
+    qapp: QApplication,
+) -> None:
+    """Raise an error when the material references provider returns a non-sequence."""
+    with pytest.raises(TypeError, match="Material references provider must return a sequence."):
+        MaterialEditorWidget._get_registered_material_references(
+            {"material_references_provider": lambda: object()},
+        )
+
+
+def test_read_only_disables_adding_material_requirements(qapp: QApplication) -> None:
     """Disable adding material requirements in read-only mode."""
     reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
 
@@ -296,7 +513,7 @@ def test_read_only_disables_adding_material_requirements(qapp: object) -> None:
     assert not crafting_materials._add_button.isEnabled()
 
 
-def test_read_only_makes_qualified_id_selectable(qapp: object) -> None:
+def test_read_only_makes_qualified_id_selectable(qapp: QApplication) -> None:
     """Allow selecting the qualified ID in read-only mode."""
     material = MaterialFactory.create()
 

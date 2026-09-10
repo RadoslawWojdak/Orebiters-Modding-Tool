@@ -21,6 +21,7 @@ dev = [
     "pre-commit>=4.6.2",
     "pytest>=9.1.1",
     "pytest-cov>=7.1.0",
+    "pytest-env>=1.7.1",
     "ruff>=0.16.5",
 ]
 
@@ -49,4 +50,12 @@ addopts = [
 ]
 
 [tool.coverage.run]
-source = ["src/orebiters_modding_tool"]
+source = ["src"]
+
+[tool.coverage.report]
+omit = [
+    "*/__init__.py",
+]
+
+[tool.pytest_env]
+QT_QPA_PLATFORM = "offscreen"

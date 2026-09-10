@@ -1,12 +1,12 @@
 from unittest.mock import Mock
 
 import pytest
-from PySide6.QtWidgets import QLabel, QWidget
+from PySide6.QtWidgets import QApplication, QLabel, QWidget
 
 from orebiters_modding_tool.app.widgets.dictionary_widget import DictionaryWidget
 
 
-def test_creates_item_widget_for_each_dictionary_item(qapp: object) -> None:
+def test_creates_item_widget_for_each_dictionary_item(qapp: QApplication) -> None:
     """Create one item widget for each dictionary value."""
     items = {
         "first": "First value",
@@ -27,7 +27,7 @@ def test_creates_item_widget_for_each_dictionary_item(qapp: object) -> None:
     assert widget._stacked_widget.count() == 3
 
 
-def test_passes_dictionary_values_to_item_widget_factory(qapp: object) -> None:
+def test_passes_dictionary_values_to_item_widget_factory(qapp: QApplication) -> None:
     """Pass each dictionary value to the item widget factory."""
     items = {
         "first": "First value",
@@ -47,7 +47,7 @@ def test_passes_dictionary_values_to_item_widget_factory(qapp: object) -> None:
     ]
 
 
-def test_stores_item_widgets_by_dictionary_key(qapp: object) -> None:
+def test_stores_item_widgets_by_dictionary_key(qapp: QApplication) -> None:
     """Store each item widget using its dictionary key."""
     first_widget = QLabel("First")
     second_widget = QLabel("Second")
@@ -66,7 +66,7 @@ def test_stores_item_widgets_by_dictionary_key(qapp: object) -> None:
     assert widget._item_widgets["second"] is second_widget
 
 
-def test_creates_item_button_for_each_dictionary_item(qapp: object) -> None:
+def test_creates_item_button_for_each_dictionary_item(qapp: QApplication) -> None:
     """Create one item button for each dictionary key."""
     items = {
         "first": object(),
@@ -83,7 +83,7 @@ def test_creates_item_button_for_each_dictionary_item(qapp: object) -> None:
     assert widget._item_buttons_layout.count() == len(items)
 
 
-def test_uses_string_representation_as_default_item_label(qapp: object) -> None:
+def test_uses_string_representation_as_default_item_label(qapp: QApplication) -> None:
     """Use string representations of keys as default item labels."""
     items = {
         1: object(),
@@ -99,7 +99,7 @@ def test_uses_string_representation_as_default_item_label(qapp: object) -> None:
     assert widget._item_buttons[2].text() == "2"
 
 
-def test_uses_item_label_factory_for_button_labels(qapp: object) -> None:
+def test_uses_item_label_factory_for_button_labels(qapp: QApplication) -> None:
     """Create item button labels using the configured label factory."""
     items = {
         "first": object(),
@@ -123,7 +123,7 @@ def test_uses_item_label_factory_for_button_labels(qapp: object) -> None:
     assert widget._item_buttons["second"].text() == "Item: second"
 
 
-def test_item_widgets_are_added_to_stacked_widget(qapp: object) -> None:
+def test_item_widgets_are_added_to_stacked_widget(qapp: QApplication) -> None:
     """Add all created item widgets to the stacked widget."""
     first_widget = QLabel("First")
     second_widget = QLabel("Second")
@@ -140,7 +140,7 @@ def test_item_widgets_are_added_to_stacked_widget(qapp: object) -> None:
     assert widget._stacked_widget.indexOf(second_widget) == 1
 
 
-def test_show_item_displays_widget_for_given_key(qapp: object) -> None:
+def test_show_item_displays_widget_for_given_key(qapp: QApplication) -> None:
     """Display the item widget associated with the given key."""
     widget = DictionaryWidget(
         item_widget_factory=lambda value: QLabel(str(value)),
@@ -155,7 +155,7 @@ def test_show_item_displays_widget_for_given_key(qapp: object) -> None:
     assert widget._stacked_widget.currentWidget() is widget._item_widgets["second"]
 
 
-def test_item_button_displays_associated_widget(qapp: object) -> None:
+def test_item_button_displays_associated_widget(qapp: QApplication) -> None:
     """Display the associated item widget when an item button is clicked."""
     widget = DictionaryWidget(
         item_widget_factory=lambda value: QLabel(str(value)),
@@ -170,7 +170,7 @@ def test_item_button_displays_associated_widget(qapp: object) -> None:
     assert widget._stacked_widget.currentWidget() is widget._item_widgets["second"]
 
 
-def test_show_item_raises_key_error_for_unknown_key(qapp: object) -> None:
+def test_show_item_raises_key_error_for_unknown_key(qapp: QApplication) -> None:
     """Raise KeyError when attempting to display an unknown key."""
     widget = DictionaryWidget(
         item_widget_factory=lambda _value: QWidget(),
@@ -181,7 +181,7 @@ def test_show_item_raises_key_error_for_unknown_key(qapp: object) -> None:
         widget.show_item("unknown")
 
 
-def test_creates_empty_dictionary_widget(qapp: object) -> None:
+def test_creates_empty_dictionary_widget(qapp: QApplication) -> None:
     """Create an empty widget when the dictionary has no items."""
     item_widget_factory = Mock()
 

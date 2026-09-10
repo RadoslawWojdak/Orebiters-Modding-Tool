@@ -36,6 +36,18 @@ class ContentReference:
         return self.qualified_id is None
 
     @property
+    def namespace(self) -> str:
+        """Get the namespace of the owning mod.
+
+        :returns: Namespace of the owning mod.
+        :raises ValueError: If the reference does not target specific content.
+        """
+        if self.qualified_id is None:
+            raise ValueError("Content reference does not target specific content.")
+
+        return self.qualified_id.split(".")[0]
+
+    @property
     def mod_id(self) -> str:
         """Get the ID of the owning mod.
 
@@ -45,7 +57,7 @@ class ContentReference:
         if self.qualified_id is None:
             raise ValueError("Content reference does not target specific content.")
 
-        return self.qualified_id.split(".", maxsplit=1)[0]
+        return self.qualified_id.split(".")[1]
 
     @property
     def content_id(self) -> str:
@@ -57,7 +69,7 @@ class ContentReference:
         if self.qualified_id is None:
             raise ValueError("Content reference does not target specific content.")
 
-        return self.qualified_id.split(".", maxsplit=1)[1]
+        return self.qualified_id.split(".")[2]
 
 
 @dataclass(slots=True, kw_only=True)
