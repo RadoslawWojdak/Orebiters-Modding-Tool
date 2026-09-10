@@ -1,3 +1,5 @@
+import pytest
+
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.domain.project_registry import ProjectRegistry
@@ -52,6 +54,37 @@ def test_remove_project_unregisters_project_and_content_references() -> None:
 
     assert registry.projects == ()
     assert registry.get_content_references(ContentType.MATERIALS) == ()
+
+
+def test_get_project_raises_for_unknown_project() -> None:
+    """Raise an error when the project does not exist."""
+    registry = ProjectRegistry()
+
+    with pytest.raises(ValueError, match="Project not found: test.unknown_mod."):
+        registry.get_project("test.unknown_mod")
+
+
+def test_has_content_reference_returns_whether_reference_is_registered() -> None:
+    """Check whether a content reference is registered."""
+    registry = ProjectRegistry()
+
+    registry.add_content_reference(ContentType.MATERIALS, "test.test_mod.clay")
+
+    assert registry.has_content_reference(ContentType.MATERIALS, "test.test_mod.clay")
+    assert not registry.has_content_reference(ContentType.MATERIALS, "test.test_mod.stone")
+
+
+def test_get_content_references_returns_independent_references() -> None:
+    """Return references independent of the registry's internal objects."""
+    registry = ProjectRegistry()
+
+    registry.add_content_reference(ContentType.MATERIALS, "test.test_mod.clay")
+
+    first_references = registry.get_content_references(ContentType.MATERIALS)
+    second_references = registry.get_content_references(ContentType.MATERIALS)
+
+    assert first_references == second_references
+    assert first_references[0] is not second_references[0]
 
 
 def test_content_reference_operations_update_registry() -> None:

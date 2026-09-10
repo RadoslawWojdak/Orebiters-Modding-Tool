@@ -1,11 +1,11 @@
 from unittest.mock import Mock
 
-from PySide6.QtWidgets import QLabel, QPushButton
+from PySide6.QtWidgets import QApplication, QLabel, QPushButton
 
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 
 
-def test_creates_widgets_for_initial_values(qapp: object) -> None:
+def test_creates_widgets_for_initial_values(qapp: QApplication) -> None:
     """Create a widget for every initial value."""
     item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
 
@@ -20,7 +20,7 @@ def test_creates_widgets_for_initial_values(qapp: object) -> None:
     item_widget_factory.assert_any_call("second")
 
 
-def test_enables_add_button_by_default(qapp: object) -> None:
+def test_enables_add_button_by_default(qapp: QApplication) -> None:
     """Enable the add button by default."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -31,7 +31,7 @@ def test_enables_add_button_by_default(qapp: object) -> None:
     assert widget._add_button.isEnabled()
 
 
-def test_enables_remove_buttons_by_default(qapp: object) -> None:
+def test_enables_remove_buttons_by_default(qapp: QApplication) -> None:
     """Enable remove buttons by default."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -47,7 +47,7 @@ def test_enables_remove_buttons_by_default(qapp: object) -> None:
     assert all(button.isEnabled() for button in remove_buttons)
 
 
-def test_add_item_creates_new_item(qapp: object) -> None:
+def test_add_item_creates_new_item(qapp: QApplication) -> None:
     """Create and add a new item using the configured factory."""
     item_factory = Mock(return_value="new value")
     item_widget_factory = Mock(side_effect=lambda value: QLabel(str(value)))
@@ -65,7 +65,7 @@ def test_add_item_creates_new_item(qapp: object) -> None:
     item_widget_factory.assert_called_once_with("new value")
 
 
-def test_remove_item_removes_widget(qapp: object) -> None:
+def test_remove_item_removes_widget(qapp: QApplication) -> None:
     """Remove an existing item widget."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -84,7 +84,7 @@ def test_remove_item_removes_widget(qapp: object) -> None:
     assert widget._items_layout.count() == 0
 
 
-def test_disables_add_button_when_provider_returns_false(qapp: object) -> None:
+def test_disables_add_button_when_provider_returns_false(qapp: QApplication) -> None:
     """Disable the add button when the provider returns false."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -96,7 +96,7 @@ def test_disables_add_button_when_provider_returns_false(qapp: object) -> None:
     assert not widget._add_button.isEnabled()
 
 
-def test_disables_remove_buttons_when_provider_returns_false(qapp: object) -> None:
+def test_disables_remove_buttons_when_provider_returns_false(qapp: QApplication) -> None:
     """Disable remove buttons when the provider returns false."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -113,7 +113,7 @@ def test_disables_remove_buttons_when_provider_returns_false(qapp: object) -> No
     assert all(not button.isEnabled() for button in remove_buttons)
 
 
-def test_add_item_does_not_add_when_add_provider_returns_false(qapp: object) -> None:
+def test_add_item_does_not_add_when_add_provider_returns_false(qapp: QApplication) -> None:
     """Do not add an item when the provider returns false."""
     item_factory = Mock(return_value="new value")
 
@@ -130,7 +130,7 @@ def test_add_item_does_not_add_when_add_provider_returns_false(qapp: object) -> 
     item_factory.assert_not_called()
 
 
-def test_remove_item_does_not_remove_when_remove_provider_returns_false(qapp: object) -> None:
+def test_remove_item_does_not_remove_when_remove_provider_returns_false(qapp: QApplication) -> None:
     """Do not remove an item when the provider returns false."""
     widget = ListWidget(
         item_factory=lambda: "new value",
@@ -150,7 +150,7 @@ def test_remove_item_does_not_remove_when_remove_provider_returns_false(qapp: ob
     assert widget._items_layout.count() == 1
 
 
-def test_refresh_updates_add_button(qapp: object) -> None:
+def test_refresh_updates_add_button(qapp: QApplication) -> None:
     """Refresh the add button state."""
     can_add = True
 
@@ -169,7 +169,7 @@ def test_refresh_updates_add_button(qapp: object) -> None:
     assert not widget._add_button.isEnabled()
 
 
-def test_refresh_updates_remove_button(qapp: object) -> None:
+def test_refresh_updates_remove_button(qapp: QApplication) -> None:
     """Refresh the remove button state."""
     can_remove = True
 
