@@ -21,7 +21,7 @@ class MaterialLocalization(ContentLocalization):
 class MaterialRequirement:
     """Material required for crafting."""
 
-    material: ContentReference
+    material_reference: ContentReference
     amount: int
 
 

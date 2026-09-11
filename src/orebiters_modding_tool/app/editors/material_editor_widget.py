@@ -136,7 +136,7 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
             if not isinstance(item_widget, MaterialRequirementEditorWidget):
                 raise TypeError("Crafting material item must be a MaterialRequirementEditorWidget.")
 
-            material_field = item_widget._fields["material"]
+            material_field = item_widget._fields["material_reference"]
 
             if not isinstance(material_field, DynamicComboBox):
                 raise TypeError("Material field must be a DynamicComboBox.")

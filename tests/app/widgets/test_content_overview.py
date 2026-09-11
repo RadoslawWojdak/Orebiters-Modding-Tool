@@ -7,6 +7,7 @@ from orebiters_modding_tool.app.widgets.content_overview_widget import (
 )
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import Material
+from tests.factories.material import MaterialFactory
 
 
 def create_materials() -> list[Material]:
@@ -15,9 +16,9 @@ def create_materials() -> list[Material]:
     :returns: Test materials.
     """
     return [
-        Material(id="iron_ore"),
-        Material(id="copper_ore"),
-        Material(id="gold_ore"),
+        MaterialFactory.create(id="iron_ore"),
+        MaterialFactory.create(id="copper_ore"),
+        MaterialFactory.create(id="gold_ore"),
     ]
 
 
@@ -176,7 +177,7 @@ def test_content_visibility_updates_when_model_changes(qapp) -> None:
     """Show the table when content is added."""
     widget = create_widget([])
 
-    widget.model.add_item(Material(id="iron_ore"))
+    widget.model.add_item(MaterialFactory.create())
 
     assert widget._content_layout.currentWidget() is widget._table_view
     assert widget._edit_action.isEnabled()

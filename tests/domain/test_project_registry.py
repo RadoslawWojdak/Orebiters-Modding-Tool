@@ -1,6 +1,6 @@
 import pytest
 
-from orebiters_modding_tool.domain.content import ContentReference, ContentType
+from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.domain.project_registry import ProjectRegistry
 from tests.factories.content import ContentReferenceFactory
@@ -91,14 +91,8 @@ def test_content_reference_operations_update_registry() -> None:
     """Add and remove content references from the registry."""
     registry = ProjectRegistry()
 
-    first_reference = ContentReference(
-        content_type=ContentType.MATERIALS,
-        qualified_id="test.first_mod.clay",
-    )
-    second_reference = ContentReference(
-        content_type=ContentType.MATERIALS,
-        qualified_id="test.second_mod.stone",
-    )
+    first_reference = ContentReferenceFactory.create(content_type=ContentType.MATERIALS)
+    second_reference = ContentReferenceFactory.create(content_type=ContentType.MATERIALS)
 
     registry.add_content_reference(first_reference.content_type, first_reference.qualified_id)
     registry.add_content_reference(second_reference.content_type, second_reference.qualified_id)

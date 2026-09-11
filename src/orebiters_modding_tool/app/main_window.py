@@ -32,16 +32,18 @@ class MainWindow(QMainWindow):
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
 
         self._setup_actions()
+        self._setup_project_explorer()
         self._setup_workspace()
         self._setup_menu_bar()
         self._setup_toolbar()
-        self._setup_project_explorer()
 
         self._update_project_actions()
 
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
         self._workspace = Workspace(self._project_service, self)
+        self._workspace.content_changed.connect(self._project_explorer.refresh)
+
         self.setCentralWidget(self._workspace)
 
     def _setup_actions(self) -> None:
@@ -164,7 +166,7 @@ class MainWindow(QMainWindow):
 
     def _setup_project_explorer(self) -> None:
         """Set up the Project Explorer dock."""
-        self._project_explorer = ProjectExplorer(self)
+        self._project_explorer = ProjectExplorer(self._project_service, self)
 
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
 
@@ -313,6 +315,7 @@ class MainWindow(QMainWindow):
         """
         self.setWindowTitle(f"{project.name} - Orebiters Modding Tool")
         self._workspace.close_project_tabs()
+        self._project_explorer.refresh()
         self._update_project_actions()
 
     def _update_project_actions(self) -> None:

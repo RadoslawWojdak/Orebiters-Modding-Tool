@@ -813,6 +813,20 @@ def test_save_updates_dictionary_values(qapp: QApplication) -> None:
     assert second_value.text == "updated second"
 
 
+def test_save_emits_saved_signal(qapp: QApplication) -> None:
+    """Emit the saved signal after saving the edited item."""
+    item = SampleItem()
+    editor = BasicFieldsEditorWidget(item)
+
+    saved_emissions: list[None] = []
+
+    editor.saved.connect(lambda: saved_emissions.append(None))
+
+    editor.save()
+
+    assert len(saved_emissions) == 1
+
+
 # =========================================================================
 # Save Button
 # =========================================================================

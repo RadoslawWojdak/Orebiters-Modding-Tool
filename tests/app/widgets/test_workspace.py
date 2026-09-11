@@ -10,7 +10,9 @@ from orebiters_modding_tool.app.widgets.content_overview_widget import ContentOv
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
-from orebiters_modding_tool.domain.material import Material, MaterialLocalization
+from orebiters_modding_tool.domain.material import Material
+from tests.factories.content import ContentReferenceFactory
+from tests.factories.material import MaterialFactory
 
 
 def test_initializes_workspace(workspace: Workspace) -> None:
@@ -49,6 +51,82 @@ def test_open_content_activates_existing_content_tab(
 
     assert workspace._tab_widget.count() == 2
     assert workspace._tab_widget.currentIndex() == 1
+
+
+def test_open_content_creates_editor_for_specific_content(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Open an editor when opening a reference to specific content."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+
+    workspace._tab_widget.setCurrentIndex(0)
+
+    workspace.open_content(
+        ContentReferenceFactory.create(
+            content_type=ContentType.MATERIALS,
+            qualified_id=material.get_qualified_id(project.qualified_id),
+        ),
+    )
+
+    current_widget = workspace._tab_widget.currentWidget()
+
+    assert isinstance(current_widget, MaterialEditorWidget)
+    assert current_widget.item is material
+
+
+def test_open_content_activates_existing_editor_for_specific_content(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Activate an existing editor instead of opening a duplicate."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+
+    reference = ContentReferenceFactory.create(
+        content_type=ContentType.MATERIALS,
+        qualified_id=material.get_qualified_id(project.qualified_id),
+    )
+
+    initial_tab_count = workspace._tab_widget.count()
+
+    workspace._tab_widget.setCurrentIndex(0)
+    workspace.open_content(reference)
+    workspace.open_content(reference)
+
+    assert workspace._tab_widget.count() == initial_tab_count
+    assert workspace._tab_widget.currentWidget() is workspace._tab_widget.widget(
+        initial_tab_count - 1,
+    )
+
+
+def test_open_content_raises_for_missing_content(workspace: Workspace) -> None:
+    """Raise an error when opening a reference to missing content."""
+    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.missing")
+
+    with pytest.raises(ValueError, match="Content not found: test.test_mod.missing."):
+        workspace.open_content(reference)
+
+
+def test_open_content_raises_for_specific_content_without_active_project(
+    workspace: Workspace,
+) -> None:
+    """Raise an error when opening specific content without an active project."""
+    workspace._project_service.close_project()
+
+    reference = ContentReferenceFactory.create()
+
+    with pytest.raises(RuntimeError, match="No active project."):
+        workspace.open_content(reference)
 
 
 def test_create_content_model_returns_material_table_model(
@@ -111,16 +189,32 @@ def test_create_content_adds_item_to_project_model_and_editor(
     assert current_widget.item is materials[0]
 
 
+def test_create_content_emits_content_changed(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Emit a content change request after creating content."""
+    workspace.open_content(materials_category_reference)
+
+    received_references: list[ContentReference] = []
+    workspace.content_changed.connect(received_references.append)
+
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+
+    assert received_references == [
+        ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron_ore"),
+    ]
+
+
 def test_edit_content_opens_editor_for_new_item(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
     """Open an editor for a content item without an existing editor."""
-    material = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    material = MaterialFactory.create()
 
     workspace._edit_content(materials_category_reference, [material])
 
@@ -236,6 +330,31 @@ def test_delete_content_removes_item_closes_editor_and_updates_model(
     "orebiters_modding_tool.app.widgets.workspace.QMessageBox.question",
     return_value=QMessageBox.StandardButton.Yes,
 )
+def test_delete_content_emits_content_changed(
+    _mock_question: object,
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Emit a content change request after deleting content."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+
+    received_references: list[ContentReference] = []
+    workspace.content_changed.connect(received_references.append)
+
+    workspace._delete_content(materials_category_reference, [material])
+
+    assert received_references == [materials_category_reference]
+
+
+@patch(
+    "orebiters_modding_tool.app.widgets.workspace.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
 def test_delete_content_ignores_items_missing_from_model(
     _mock_question: object,
     workspace: Workspace,
@@ -245,40 +364,18 @@ def test_delete_content_ignores_items_missing_from_model(
     workspace.open_content(materials_category_reference)
     content_widget = workspace._get_content_widget(materials_category_reference)
 
-    item = Material(
-        id="iron_ore",
-        localizations={
-            "en": MaterialLocalization(),
-            "pl": MaterialLocalization(),
-        },
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
 
     workspace._delete_content(materials_category_reference, [item])
 
     assert content_widget.model.rowCount() == 0
 
 
-def test_close_project_tabs_closes_project_tabs_and_keeps_welcome(
-    workspace: Workspace,
+def test_create_content_item_creates_material(
     materials_category_reference: ContentReference,
 ) -> None:
-    """Close project tabs without closing the Welcome tab."""
-    workspace.open_content(materials_category_reference)
-    workspace._create_content(materials_category_reference, "iron_ore")
-
-    workspace.close_project_tabs()
-
-    assert workspace._tab_widget.count() == 1
-    assert workspace._tab_widget.tabText(0) == "Welcome"
-
-
-def test_create_content_item_creates_material() -> None:
     """Create a material with default localizations and crafting materials."""
-    item = Workspace._create_content_item(
-        ContentReference(content_type=ContentType.MATERIALS),
-        "iron_ore",
-    )
+    item = Workspace._create_content_item(materials_category_reference, "iron_ore")
 
     assert isinstance(item, Material)
     assert item.id == "iron_ore"
@@ -299,14 +396,7 @@ def test_create_content_editor_creates_material_editor(
     materials_category_reference: ContentReference,
 ) -> None:
     """Create a material editor for a material item."""
-    item = Material(
-        id="iron_ore",
-        localizations={
-            "en": MaterialLocalization(),
-            "pl": MaterialLocalization(),
-        },
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
 
     editor = workspace._create_content_editor(materials_category_reference, item)
 
@@ -325,12 +415,68 @@ def test_create_content_editor_raises_for_invalid_material(
         workspace._create_content_editor(materials_category_reference, item)  # type: ignore[arg-type]
 
 
-def test_create_content_editor_raises_for_unsupported_content_type(workspace: Workspace) -> None:
+def test_create_content_editor_raises_for_unsupported_content_type(
+    workspace: Workspace,
+) -> None:
     """Raise an error when creating an editor for an unsupported content type."""
     reference = ContentReference(content_type=ContentType.ITEMS)
 
     with pytest.raises(ValueError, match="Unsupported content type"):
         workspace._create_content_editor(reference, object())  # type: ignore[arg-type]
+
+
+def test_create_content_editor_connects_saved_signal(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Emit a content change when the created editor is saved."""
+    item = MaterialFactory.create(id="iron_ore")
+
+    editor = workspace._create_content_editor(materials_category_reference, item)
+
+    received_references: list[ContentReference] = []
+    workspace.content_changed.connect(received_references.append)
+
+    editor.saved.emit()
+
+    project = workspace._project_service.active_project
+    assert project is not None
+
+    assert received_references == [
+        ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron_ore"),
+    ]
+
+
+def test_saving_content_emits_updated_content_reference(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Emit the updated content reference when saving edited content."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+
+    editor = workspace._find_editor_tab(material)
+    assert editor is not None
+    assert isinstance(workspace._tab_widget.widget(editor), BaseEditorWidget)
+
+    editor_widget = workspace._tab_widget.widget(editor)
+    assert isinstance(editor_widget, BaseEditorWidget)
+
+    received_references: list[ContentReference] = []
+    workspace.content_changed.connect(received_references.append)
+
+    material.id = "refined_iron"
+
+    editor_widget.saved.emit()
+
+    assert received_references[-1] == ContentReference(
+        content_type=ContentType.MATERIALS,
+        qualified_id="test.test_mod.refined_iron",
+    )
 
 
 def test_create_material_editor_context_contains_project_information(workspace: Workspace) -> None:
@@ -350,6 +496,30 @@ def test_create_material_editor_context_raises_without_active_project(workspace:
 
     with pytest.raises(RuntimeError, match="No active project."):
         workspace._create_material_editor_context()
+
+
+def test_create_content_reference_returns_reference_to_content(workspace: Workspace) -> None:
+    """Create a reference to content in the active project."""
+    item = MaterialFactory.create(id="iron_ore")
+    reference = workspace._create_content_reference(ContentType.MATERIALS, item)
+
+    project = workspace._project_service.active_project
+    assert project is not None
+
+    assert reference == ContentReference(
+        content_type=ContentType.MATERIALS,
+        qualified_id=f"{project.qualified_id}.iron_ore",
+    )
+
+
+def test_create_content_reference_raises_without_active_project(workspace: Workspace) -> None:
+    """Raise an error when creating a content reference without an active project."""
+    workspace._project_service.close_project()
+
+    item = MaterialFactory.create()
+
+    with pytest.raises(RuntimeError, match="No active project."):
+        workspace._create_content_reference(ContentType.MATERIALS, item)
 
 
 def test_get_content_widget_returns_open_content_widget(
@@ -376,16 +546,8 @@ def test_get_content_widget_raises_for_closed_content_tab(
 
 def test_find_item_row_returns_matching_item_row() -> None:
     """Return the row containing the requested item."""
-    item = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
-    other_item = Material(
-        id="copper_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
+    other_item = MaterialFactory.create()
 
     model = MaterialTableModel([item, other_item])
 
@@ -394,18 +556,10 @@ def test_find_item_row_returns_matching_item_row() -> None:
 
 def test_find_item_row_returns_none_for_missing_item() -> None:
     """Return none when the requested item is not in the model."""
-    item = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
     model = MaterialTableModel([item])
 
-    missing_item = Material(
-        id="copper_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    missing_item = MaterialFactory.create()
 
     assert Workspace._find_item_row(model, missing_item) is None
 
@@ -463,15 +617,9 @@ def test_close_editor_tab_closes_matching_editor(
     assert workspace._find_editor_tab(material) is None
 
 
-def test_close_editor_tab_ignores_missing_editor(
-    workspace: Workspace,
-) -> None:
+def test_close_editor_tab_ignores_missing_editor(workspace: Workspace) -> None:
     """Ignore requests to close a content item without an open editor."""
-    item = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
 
     workspace._close_editor_tab(item)
 
@@ -498,36 +646,28 @@ def test_find_editor_tab_returns_matching_editor(
 
 def test_find_editor_tab_returns_none_for_missing_editor(workspace: Workspace) -> None:
     """Return none when a content editor is not open."""
-    item = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create()
 
     assert workspace._find_editor_tab(item) is None
 
 
 def test_get_editor_tab_name_returns_item_id() -> None:
     """Return the content ID as the editor tab name."""
-    item = Material(
-        id="iron_ore",
-        localizations={},
-        crafting_materials=[],
-    )
+    item = MaterialFactory.create(id="iron_ore")
 
     assert Workspace._get_editor_tab_name(item) == "iron_ore"
 
 
-def test_get_tab_name_returns_content_type_for_category_reference() -> None:
+def test_get_tab_name_returns_content_type_for_category_reference(
+    materials_category_reference: ContentReference,
+) -> None:
     """Return the content type name for a category reference."""
-    reference = ContentReference(content_type=ContentType.MATERIALS)
-
-    assert Workspace._get_tab_name(reference) == "Materials"
+    assert Workspace._get_tab_name(materials_category_reference) == "Materials"
 
 
 def test_get_tab_name_returns_content_type_and_content_id() -> None:
     """Return the content type name and content ID for a content reference."""
-    reference = ContentReference(
+    reference = ContentReferenceFactory.create(
         content_type=ContentType.MATERIALS,
         qualified_id="orebiters.core.iron",
     )

@@ -1,7 +1,6 @@
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
-from orebiters_modding_tool.domain.material import MaterialRequirement
-from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+from tests.factories.material_requirement import MaterialRequirementFactory
 
 
 def test_row_count_returns_number_of_materials() -> None:
@@ -16,17 +15,9 @@ def test_row_count_returns_number_of_materials() -> None:
 
 def test_craftable_column_returns_true_for_craftable_material() -> None:
     """Test that craftable column identifies craftable materials."""
-
-    clay = MaterialFactory.create(id="clay")
-
     mud_patch_mix = MaterialFactory.create(
         id="mud_patch_mix",
-        crafting_materials=[
-            MaterialRequirement(
-                material=ContentReferenceFactory.from_content(clay, mod_id="core"),
-                amount=1,
-            ),
-        ],
+        crafting_materials=[MaterialRequirementFactory.create()],
     )
 
     model = MaterialTableModel([mud_patch_mix])

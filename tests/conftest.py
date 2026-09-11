@@ -33,6 +33,15 @@ def project_service(tmp_path: Path) -> ProjectService:
 
 
 @pytest.fixture
+def active_project_service(project_service: ProjectService) -> ProjectService:
+    """Provide a project service with an active project."""
+    project = project_service.create_project(namespace="test", name="Test Mod")
+    project_service.open_project(project.qualified_id)
+
+    return project_service
+
+
+@pytest.fixture
 def workspace(qapp: QApplication, project_service: ProjectService) -> Workspace:
     """Provide a workspace with an active project."""
     project_service.create_project(
