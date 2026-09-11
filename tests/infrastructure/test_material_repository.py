@@ -1,11 +1,10 @@
 from pathlib import Path
 
-from orebiters_modding_tool.domain.content import ContentReference, ContentType
-from orebiters_modding_tool.domain.material import MaterialRequirement
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+from tests.factories.material_requirement import MaterialRequirementFactory
 
 
 def test_save_and_load_material(tmp_path: Path) -> None:
@@ -19,8 +18,8 @@ def test_save_and_load_material(tmp_path: Path) -> None:
     mud_patch_mix = MaterialFactory.create(
         id="mud_patch_mix",
         crafting_materials=[
-            MaterialRequirement(
-                material=ContentReferenceFactory.from_content(clay, mod_id=project.qualified_id),
+            MaterialRequirementFactory.create(
+                ContentReferenceFactory.from_content(clay, mod_id=project.qualified_id),
                 amount=2,
             ),
         ],
@@ -37,7 +36,7 @@ def test_save_and_load_material(tmp_path: Path) -> None:
 
     requirement = loaded_material.crafting_materials[0]
 
-    assert requirement.material == ContentReferenceFactory.from_content(
+    assert requirement.material_reference == ContentReferenceFactory.from_content(
         clay,
         mod_id=project.qualified_id,
     )
@@ -114,15 +113,7 @@ def test_save_overwrites_existing_material(tmp_path: Path) -> None:
     material = MaterialFactory.create(id="clay")
     repository.save(project, material)
 
-    material.crafting_materials.append(
-        MaterialRequirement(
-            material=ContentReference(
-                content_type=ContentType.MATERIALS,
-                qualified_id="test.test_mod.stone",
-            ),
-            amount=2,
-        ),
-    )
+    material.crafting_materials.append(MaterialRequirementFactory.create())
 
     repository.save(project, material)
 

@@ -46,7 +46,7 @@ class MaterialRequirementEditorWidget(BaseEditorWidget[MaterialRequirement]):
 
     FIELDS = (
         EditorField(
-            name="material",
+            name="material_reference",
             label="Material",
             choices_provider=_get_material_choices,
             choice_formatter=_format_material_choice,

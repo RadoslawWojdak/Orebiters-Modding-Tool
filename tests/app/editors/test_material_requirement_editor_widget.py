@@ -6,21 +6,21 @@ from orebiters_modding_tool.app.editors.material_requirement_editor_widget impor
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.domain.content import ContentReference
-from orebiters_modding_tool.domain.material import MaterialRequirement
 from tests.factories.content import ContentReferenceFactory
+from tests.factories.material_requirement import MaterialRequirementFactory
 
 
 def test_displays_material_and_amount(qapp: QApplication) -> None:
     """Display the material and amount fields."""
     material_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
-    requirement = MaterialRequirement(material=material_reference, amount=3)
+    requirement = MaterialRequirementFactory.create(material_reference, 3)
 
     editor = MaterialRequirementEditorWidget(
         requirement,
         context={"material_references_provider": lambda: [material_reference]},
     )
 
-    material_field = editor._fields["material"]
+    material_field = editor._fields["material_reference"]
     amount_field = editor._fields["amount"]
 
     assert isinstance(material_field, DynamicComboBox)
@@ -36,7 +36,7 @@ def test_get_material_choices_returns_all_references_without_exclusion_provider(
     second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
 
     editor = MaterialRequirementEditorWidget(
-        MaterialRequirement(first_reference, 1),
+        MaterialRequirementFactory.create(first_reference),
         context={"material_references_provider": lambda: [first_reference, second_reference]},
     )
 
@@ -50,7 +50,7 @@ def test_get_material_choices_excludes_references_from_provider(qapp: QApplicati
     third_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
 
     editor = MaterialRequirementEditorWidget(
-        MaterialRequirement(first_reference, 1),
+        MaterialRequirementFactory.create(first_reference),
         context={
             "material_references_provider": lambda: [
                 first_reference,
@@ -73,7 +73,7 @@ def test_get_material_choices_passes_current_material_to_exclusion_provider(
     received_materials: list[ContentReference | None] = []
 
     editor = MaterialRequirementEditorWidget(
-        MaterialRequirement(current_reference, 1),
+        MaterialRequirementFactory.create(current_reference),
         context={
             "material_references_provider": lambda: [current_reference, other_reference],
             "excluded_material_references_provider": lambda current_material: (
@@ -95,11 +95,11 @@ def test_refreshes_material_choices_from_current_provider(qapp: QApplication) ->
     references = [first_reference]
 
     editor = MaterialRequirementEditorWidget(
-        MaterialRequirement(first_reference, 1),
+        MaterialRequirementFactory.create(first_reference),
         context={"material_references_provider": lambda: references},
     )
 
-    material_field = editor._fields["material"]
+    material_field = editor._fields["material_reference"]
 
     assert isinstance(material_field, DynamicComboBox)
     assert material_field.count() == 1
@@ -148,12 +148,7 @@ def test_get_material_references_raises_without_provider(qapp: QApplication) -> 
         TypeError,
         match="Context value 'material_references_provider' must be callable.",
     ):
-        MaterialRequirementEditorWidget(
-            MaterialRequirement(
-                ContentReferenceFactory.create(qualified_id="orebiters.core.copper"),
-                1,
-            ),
-        )
+        MaterialRequirementEditorWidget(MaterialRequirementFactory.create())
 
 
 def test_get_material_references_raises_when_provider_returns_invalid_value(
@@ -162,9 +157,6 @@ def test_get_material_references_raises_when_provider_returns_invalid_value(
     """Raise an error when the material references provider returns a non-sequence."""
     with pytest.raises(TypeError, match="Material references provider must return a sequence."):
         MaterialRequirementEditorWidget(
-            MaterialRequirement(
-                ContentReferenceFactory.create(qualified_id="orebiters.core.copper"),
-                1,
-            ),
+            MaterialRequirementFactory.create(),
             context={"material_references_provider": lambda: object()},
         )

@@ -8,7 +8,7 @@ from orebiters_modding_tool.app.editors.material_requirement_editor_widget impor
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
-from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import MaterialRequirement
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
@@ -62,7 +62,7 @@ def test_create_material_requirement_uses_first_available_reference(qapp: QAppli
     )
 
     assert isinstance(requirement, MaterialRequirement)
-    assert requirement.material == first_available_reference
+    assert requirement.material_reference == first_available_reference
     assert requirement.amount == 1
 
 
@@ -99,14 +99,20 @@ def test_create_material_requirement_raises_without_available_references(
 def test_material_requirement_excludes_current_material(qapp: QApplication) -> None:
     """Exclude the edited material from material requirement choices."""
     material = MaterialFactory.create(id="iron")
-    other_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    other_reference = ContentReferenceFactory.create(
+        content_type=ContentType.MATERIALS,
+        qualified_id="orebiters.core.copper",
+    )
 
     editor = MaterialEditorWidget(
         material,
         context={
             "mod_id": "orebiters.core",
             "material_references_provider": lambda: [
-                ContentReferenceFactory.create(qualified_id="orebiters.core.iron"),
+                ContentReferenceFactory.create(
+                    content_type=ContentType.MATERIALS,
+                    qualified_id="orebiters.core.iron",
+                ),
                 other_reference,
             ],
         },
@@ -121,7 +127,7 @@ def test_material_requirement_excludes_current_material(qapp: QApplication) -> N
     item_widget = crafting_materials.item_at(0)
     assert isinstance(item_widget, MaterialRequirementEditorWidget)
 
-    material_field = item_widget._fields["material"]
+    material_field = item_widget._fields["material_reference"]
     assert isinstance(material_field, DynamicComboBox)
 
     material_field.showPopup()
@@ -163,7 +169,7 @@ def test_material_requirement_excludes_already_used_materials(qapp: QApplication
     first_item = crafting_materials.item_at(0)
     assert isinstance(first_item, MaterialRequirementEditorWidget)
 
-    first_material_field = first_item._fields["material"]
+    first_material_field = first_item._fields["material_reference"]
     assert isinstance(first_material_field, DynamicComboBox)
 
     first_material_field.setCurrentIndex(first_material_field.find_data_equal(used_reference))
@@ -175,7 +181,7 @@ def test_material_requirement_excludes_already_used_materials(qapp: QApplication
     second_item = crafting_materials.item_at(1)
     assert isinstance(second_item, MaterialRequirementEditorWidget)
 
-    second_material_field = second_item._fields["material"]
+    second_material_field = second_item._fields["material_reference"]
     assert isinstance(second_material_field, DynamicComboBox)
 
     second_material_field.showPopup()
@@ -219,7 +225,7 @@ def test_material_requirement_keeps_its_current_material_available(qapp: QApplic
     item_widget = crafting_materials.item_at(0)
     assert isinstance(item_widget, MaterialRequirementEditorWidget)
 
-    material_field = item_widget._fields["material"]
+    material_field = item_widget._fields["material_reference"]
     assert isinstance(material_field, DynamicComboBox)
 
     material_field.setCurrentIndex(material_field.find_data_equal(current_reference))
@@ -261,7 +267,7 @@ def test_removed_material_requirement_makes_reference_available_again(qapp: QApp
     first_item = crafting_materials.item_at(0)
     assert isinstance(first_item, MaterialRequirementEditorWidget)
 
-    first_material_field = first_item._fields["material"]
+    first_material_field = first_item._fields["material_reference"]
     assert isinstance(first_material_field, DynamicComboBox)
 
     first_material_field.setCurrentIndex(first_material_field.find_data_equal(used_reference))
@@ -273,7 +279,7 @@ def test_removed_material_requirement_makes_reference_available_again(qapp: QApp
     second_item = crafting_materials.item_at(1)
     assert isinstance(second_item, MaterialRequirementEditorWidget)
 
-    second_material_field = second_item._fields["material"]
+    second_material_field = second_item._fields["material_reference"]
     assert isinstance(second_material_field, DynamicComboBox)
 
     second_material_field.showPopup()
@@ -331,8 +337,8 @@ def test_get_used_material_references_returns_current_values(qapp: QApplication)
     assert isinstance(first_item, MaterialRequirementEditorWidget)
     assert isinstance(second_item, MaterialRequirementEditorWidget)
 
-    first_material_field = first_item._fields["material"]
-    second_material_field = second_item._fields["material"]
+    first_material_field = first_item._fields["material_reference"]
+    second_material_field = second_item._fields["material_reference"]
 
     assert isinstance(first_material_field, DynamicComboBox)
     assert isinstance(second_material_field, DynamicComboBox)
@@ -404,7 +410,7 @@ def test_get_used_material_references_raises_for_invalid_material_field(qapp: QA
 
     assert isinstance(item_widget, MaterialRequirementEditorWidget)
 
-    item_widget._fields["material"] = QWidget()
+    item_widget._fields["material_reference"] = QWidget()
 
     with pytest.raises(
         TypeError,
@@ -417,7 +423,10 @@ def test_can_add_material_requirement_returns_false_when_no_reference_is_availab
     qapp: QApplication,
 ) -> None:
     """Prevent adding a requirement when every reference is excluded."""
-    current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    current_reference = ContentReferenceFactory.create(
+        content_type=ContentType.MATERIALS,
+        qualified_id="orebiters.core.iron",
+    )
 
     editor = MaterialEditorWidget(
         MaterialFactory.create(id="iron"),

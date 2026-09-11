@@ -7,7 +7,6 @@ from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.material import (
     Material,
     MaterialLocalization,
-    MaterialRequirement,
 )
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
@@ -15,6 +14,7 @@ from orebiters_modding_tool.infrastructure.project_repository import ProjectRepo
 from orebiters_modding_tool.services.project_service import ProjectService
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+from tests.factories.material_requirement import MaterialRequirementFactory
 
 
 def test_create_project_normalizes_identifiers_and_activates_project(
@@ -83,8 +83,8 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
     mud_patch_mix = MaterialFactory.create(
         id="mud_patch_mix",
         crafting_materials=[
-            MaterialRequirement(
-                material=ContentReferenceFactory.from_content(clay, mod_id=project.qualified_id),
+            MaterialRequirementFactory.create(
+                ContentReferenceFactory.from_content(clay, mod_id=project.qualified_id),
                 amount=2,
             ),
         ],
@@ -114,7 +114,7 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
 
     requirement = loaded_mud_patch_mix.crafting_materials[0]
 
-    assert requirement.material == ContentReferenceFactory.from_content(
+    assert requirement.material_reference == ContentReferenceFactory.from_content(
         clay,
         mod_id=project.qualified_id,
     )

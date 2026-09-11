@@ -1,5 +1,6 @@
 from typing import Any, cast
 
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import QMessageBox, QTabWidget, QVBoxLayout, QWidget
 
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
@@ -19,6 +20,8 @@ from orebiters_modding_tool.services.project_service import ProjectService
 
 class Workspace(QWidget):
     """Central workspace of the application."""
+
+    content_changed = Signal(ContentReference)
 
     def __init__(self, project_service: ProjectService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -61,12 +64,22 @@ class Workspace(QWidget):
     # =========================================================================
 
     def open_content(self, content_reference: ContentReference) -> None:
-        """Open content in the workspace.
+        """Open the content represented by a reference.
 
-        :param content_reference: Reference to the content to open.
+        :param content_reference: Reference to the content or content category.
+        """
+        if content_reference.is_category:
+            self._open_content_overview(content_reference)
+            return
+
+        self._open_content_editor(content_reference)
+
+    def _open_content_overview(self, content_reference: ContentReference) -> None:
+        """Open a content overview.
+
+        :param content_reference: Reference to a content category.
         """
         existing_index = self._find_content_tab(content_reference)
-
         if existing_index is not None:
             self._tab_widget.setCurrentIndex(existing_index)
             return
@@ -74,8 +87,28 @@ class Workspace(QWidget):
         content_widget = self._create_content_widget(content_reference)
         tab_name = self._get_tab_name(content_reference)
         tab_index = self._tab_widget.addTab(content_widget, tab_name)
-
         self._tab_widget.setCurrentIndex(tab_index)
+
+    def _open_content_editor(self, content_reference: ContentReference) -> None:
+        """Open the editor for specific content.
+
+        :param content_reference: Reference to the content to edit.
+        """
+        active_project = self._project_service.active_project
+        if active_project is None:
+            raise RuntimeError("No active project.")
+
+        if content_reference.qualified_id is None:
+            raise ValueError("Expected a reference to specific content.")
+
+        content_id = content_reference.content_id
+
+        for item in active_project.content[content_reference.content_type]:
+            if item.id == content_id:
+                self._edit_content(content_reference, [item])
+                return
+
+        raise ValueError(f"Content not found: {content_reference.qualified_id}.")
 
     def _create_content_widget(
         self,
@@ -154,6 +187,10 @@ class Workspace(QWidget):
         content_widget = self._get_content_widget(content_reference)
         content_widget.model.add_item(item)
 
+        self.content_changed.emit(
+            self._create_content_reference(content_reference.content_type, item)
+        )
+
         editor = self._create_content_editor(content_reference, item)
 
         tab_index = self._tab_widget.addTab(editor, self._get_editor_tab_name(item))
@@ -209,6 +246,8 @@ class Workspace(QWidget):
                 self._project_service.remove_content(content_reference.content_type, item)
                 model.remove_item(row)
 
+        self.content_changed.emit(content_reference)
+
     # =========================================================================
     # Editors
     # =========================================================================
@@ -251,7 +290,7 @@ class Workspace(QWidget):
                 if not isinstance(item, Material):
                     raise TypeError("Expected a Material.")
 
-                return MaterialEditorWidget(
+                editor = MaterialEditorWidget(
                     item=item,
                     context=self._create_material_editor_context(),
                     parent=self,
@@ -259,6 +298,10 @@ class Workspace(QWidget):
 
             case _:
                 raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
+
+        editor.saved.connect(lambda: self._handle_content_saved(content_reference, item))
+
+        return editor
 
     def _create_material_editor_context(self) -> dict[str, object]:
         """Create context required by the material editor.
@@ -277,9 +320,44 @@ class Workspace(QWidget):
             ),
         }
 
+    def _handle_content_saved(
+        self,
+        content_reference: ContentReference,
+        item: Content[Any],
+    ) -> None:
+        """Handle saved content.
+
+        :param content_reference: Reference used to open the content.
+        :param item: Saved content item.
+        """
+        self.content_changed.emit(
+            self._create_content_reference(content_reference.content_type, item)
+        )
+
     # =========================================================================
     # Helpers
     # =========================================================================
+
+    def _create_content_reference(
+        self,
+        content_type: ContentType,
+        item: Content[Any],
+    ) -> ContentReference:
+        """Create a reference to content in the active project.
+
+        :param content_type: Type of the content.
+        :param item: Content item.
+        :returns: Reference to the content.
+        """
+        active_project = self._project_service.active_project
+
+        if active_project is None:
+            raise RuntimeError("No active project.")
+
+        return ContentReference(
+            content_type=content_type,
+            qualified_id=item.get_qualified_id(active_project.qualified_id),
+        )
 
     def _get_content_widget(
         self,

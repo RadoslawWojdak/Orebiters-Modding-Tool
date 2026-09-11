@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from enum import Enum
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -27,6 +27,8 @@ class BaseEditorWidget[T](QWidget):
     SECTION_SPACING = 12
 
     FIELDS: tuple[EditorField, ...] = ()
+
+    saved = Signal()
 
     def __init__(
         self,
@@ -70,6 +72,8 @@ class BaseEditorWidget[T](QWidget):
         """Save all editable field values to the edited item."""
         for field_config in self.FIELDS:
             self._save_field(field_config)
+
+        self.saved.emit()
 
     def refresh(self) -> None:
         """Refresh this editor and its nested editors."""

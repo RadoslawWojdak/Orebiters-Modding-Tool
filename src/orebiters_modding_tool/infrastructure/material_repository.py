@@ -109,7 +109,7 @@ class MaterialRepository:
             "id": material.get_qualified_id(project.qualified_id),
             "icon_tag": f"materials:{material.id}",
             "crafting_materials": {
-                requirement.material.qualified_id: requirement.amount
+                requirement.material_reference.qualified_id: requirement.amount
                 for requirement in material.crafting_materials
             },
         }
@@ -128,7 +128,7 @@ class MaterialRepository:
 
         crafting_materials = [
             MaterialRequirement(
-                material=ContentReference(
+                material_reference=ContentReference(
                     content_type=ContentType.MATERIALS,
                     qualified_id=qualified_id,
                 ),
