@@ -3,9 +3,12 @@ from typing import Any
 
 from PySide6.QtCore import QAbstractProxyModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QAction, QFont, QIcon, QKeySequence
-from PySide6.QtWidgets import QLabel, QStackedLayout, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QLabel, QLineEdit, QStackedLayout, QToolBar, QVBoxLayout, QWidget
 
 from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
+from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
+    TableSortFilterProxyModel,
+)
 from orebiters_modding_tool.app.widgets.content_table_view import ContentTableView
 from orebiters_modding_tool.domain.content import Content, ContentReference
 
@@ -47,6 +50,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
 
         self._content_reference = content_reference
         self._model = model
+        self._proxy_model = TableSortFilterProxyModel(model)
         self._config = config
 
         self._setup_layout()
@@ -88,6 +92,9 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         self._toolbar = self._create_toolbar()
         layout.addWidget(self._toolbar)
 
+        self._filter_edit = self._create_filter_edit()
+        layout.addWidget(self._filter_edit)
+
         self._content_layout = self._create_content_layout()
         layout.addLayout(self._content_layout)
 
@@ -125,6 +132,18 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
 
         return toolbar
 
+    def _create_filter_edit(self) -> QLineEdit:
+        """Create the content filter input.
+
+        :returns: Configured filter input.
+        """
+        filter_edit = QLineEdit(self)
+        filter_edit.setObjectName("filter_edit")
+        filter_edit.setPlaceholderText(f"Search {self._config.title.lower()}...")
+        filter_edit.setClearButtonEnabled(True)
+
+        return filter_edit
+
     def _create_content_layout(self) -> QStackedLayout:
         """Create the switchable content area.
 
@@ -133,7 +152,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         content_layout = QStackedLayout()
 
         self._message_label = self._create_message_label()
-        self._table_view = ContentTableView(self._model, self)
+        self._table_view = ContentTableView(self._proxy_model, self)
 
         content_layout.addWidget(self._message_label)
         content_layout.addWidget(self._table_view)
@@ -145,6 +164,9 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         self._model.rowsInserted.connect(self._update_content_visibility)
         self._model.rowsRemoved.connect(self._update_content_visibility)
         self._model.modelReset.connect(self._update_content_visibility)
+
+        self._filter_edit.textChanged.connect(self._on_filter_text_changed)
+
         self._table_view.doubleClicked.connect(self._on_item_double_clicked)
 
     def _get_selected_items(self) -> list[T]:
@@ -153,7 +175,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         :returns: Selected content items.
         """
         selection_model = self._table_view.selectionModel()
-        return [self._model.get_item(index.row()) for index in selection_model.selectedRows()]
+        return [self._get_item_from_view_index(index) for index in selection_model.selectedRows()]
 
     def _get_item_from_view_index(self, index: QModelIndex) -> T:
         """Return the item represented by a view index.
@@ -203,6 +225,14 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         item = self._get_item_from_view_index(index)
         self.edit_requested.emit(self._content_reference, [item])
 
+    def _on_filter_text_changed(self, text: str) -> None:
+        """Handle a change in the filter text.
+
+        :param text: New filter text.
+        """
+        self._proxy_model.set_filter_text(text)
+        self._update_content_visibility()
+
     def _select_all_content(self) -> None:
         """Select all rows in the content table."""
         self._table_view.selectAll()
@@ -246,7 +276,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
     def _create_message_label(self) -> QLabel:
         """Create the empty content message label.
 
-        :returns: Configured message label.
+        :returns: Configured empty content message label.
         """
         message_label = QLabel(self._config.empty_message, self)
         message_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
