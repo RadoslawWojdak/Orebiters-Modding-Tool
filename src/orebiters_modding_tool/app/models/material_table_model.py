@@ -26,5 +26,6 @@ class MaterialTableModel(BaseTableModel[Material]):
             header="Craftable",
             tooltip="Whether the material can be crafted",
             getter=lambda material: "✔️" if bool(material.crafting_materials) else "",
+            filterable=False,
         ),
     )

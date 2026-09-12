@@ -1,5 +1,9 @@
-from PySide6.QtCore import QAbstractItemModel
+from PySide6.QtCore import QAbstractItemModel, Qt
 from PySide6.QtWidgets import QTableView, QWidget
+
+from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
+    TableSortFilterProxyModel,
+)
 
 
 class ContentTableView(QTableView):
@@ -15,6 +19,8 @@ class ContentTableView(QTableView):
 
         self.setModel(model)
 
+        self._sort_indicator = (-1, Qt.SortOrder.AscendingOrder)
+
         self._setup_view()
 
     def _setup_view(self) -> None:
@@ -27,5 +33,26 @@ class ContentTableView(QTableView):
 
         self.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
 
-        horizontal_header = self.horizontalHeader()
-        horizontal_header.setStretchLastSection(True)
+        header = self.horizontalHeader()
+        header.setStretchLastSection(True)
+        header.sectionClicked.connect(self._on_header_clicked)
+
+    def _on_header_clicked(self, column: int) -> None:
+        """Handle a table header click.
+
+        :param column: Clicked column index.
+        """
+        proxy_model = self.model()
+
+        if not isinstance(proxy_model, TableSortFilterProxyModel):
+            return
+
+        if not proxy_model.is_column_sortable(column):
+            self.horizontalHeader().setSortIndicator(*self._sort_indicator)
+            return
+
+        if not self.isSortingEnabled():
+            self.setSortingEnabled(True)
+            self.sortByColumn(column, Qt.SortOrder.AscendingOrder)
+
+        self._sort_indicator = column, self.horizontalHeader().sortIndicatorOrder()

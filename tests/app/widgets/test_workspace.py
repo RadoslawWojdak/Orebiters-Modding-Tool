@@ -6,7 +6,7 @@ from PySide6.QtWidgets import QMessageBox
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
-from orebiters_modding_tool.app.widgets.content_overview_widget import ContentOverviewWidget
+from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewWidget
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
@@ -369,6 +369,20 @@ def test_delete_content_ignores_items_missing_from_model(
     workspace._delete_content(materials_category_reference, [item])
 
     assert content_widget.model.rowCount() == 0
+
+
+def test_close_project_tabs_closes_project_tabs_and_keeps_welcome(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Close project tabs without closing the Welcome tab."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    workspace.close_project_tabs()
+
+    assert workspace._tab_widget.count() == 1
+    assert workspace._tab_widget.tabText(0) == "Welcome"
 
 
 def test_create_content_item_creates_material(

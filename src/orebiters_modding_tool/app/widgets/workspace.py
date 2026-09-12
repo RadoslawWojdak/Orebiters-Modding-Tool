@@ -8,7 +8,7 @@ from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidg
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
-from orebiters_modding_tool.app.widgets.content_overview_widget import (
+from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewConfig,
     ContentOverviewWidget,
 )

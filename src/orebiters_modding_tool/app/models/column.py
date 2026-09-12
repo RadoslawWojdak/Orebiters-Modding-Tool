@@ -10,3 +10,5 @@ class Column[T]:
     tooltip: str
     getter: Callable[[T], object]
     setter: Callable[[T, object], None] | None = None
+    filterable: bool = True
+    sortable: bool = True
