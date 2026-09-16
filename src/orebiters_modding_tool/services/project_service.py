@@ -52,6 +52,14 @@ class ProjectService:
         """
         return self._project_registry.get_content_references(content_type)
 
+    def mark_project_as_modified(self) -> None:
+        """Mark the active project as having unsaved changes."""
+        self._require_active_project().has_unsaved_changes = True
+
+    def _mark_project_as_saved(self) -> None:
+        """Mark the active project as having no unsaved changes."""
+        self._require_active_project().has_unsaved_changes = False
+
     def create_project(self, namespace: str, name: str) -> Project:
         """Create, persist, and activate a new project.
 
@@ -70,13 +78,39 @@ class ProjectService:
         return project
 
     def open_project(self, qualified_id: str) -> Project:
-        """Set the active project.
+        """Open a project from persistent storage.
 
         :param qualified_id: Namespace-qualified project identifier.
         :returns: Opened project.
         """
-        self._active_project = self._project_registry.get_project(qualified_id)
-        return self._active_project
+        project = self._load_project(qualified_id)
+
+        self._project_registry.replace_project(project)
+        self._active_project = project
+
+        self.refresh_projects()
+
+        return project
+
+    def refresh_projects(self) -> None:
+        """Refresh non-active projects from persistent storage."""
+        active_project_id = (
+            self._active_project.qualified_id if self._active_project is not None else None
+        )
+        project_ids = self._project_repository.list_project_qualified_ids()
+
+        for qualified_id in project_ids:
+            if qualified_id == active_project_id:
+                continue
+
+            self._project_registry.replace_project(self._load_project(qualified_id))
+
+        for project in self._project_registry.projects:
+            if project.qualified_id == active_project_id:
+                continue
+
+            if project.qualified_id not in project_ids:
+                self._project_registry.remove_project(project)
 
     def list_project_qualified_ids(self) -> list[str]:
         """Return a sorted list of qualified identifiers of all available projects."""
@@ -89,6 +123,8 @@ class ProjectService:
         self._project_repository.save(project)
         self._save_materials(project)
         self._save_localizations(project)
+
+        self._mark_project_as_saved()
 
     def close_project(self) -> None:
         """Close the currently active project."""
@@ -104,13 +140,12 @@ class ProjectService:
 
         qualified_id = content.get_qualified_id(project.qualified_id)
 
-        if qualified_id is not None and self._project_registry.has_content_reference(
-            content_type, qualified_id
-        ):
+        if self._project_registry.has_content_reference(content_type, qualified_id):
             raise ValueError(f"Content with ID '{content.id}' already exists.")
 
         project.content[content_type].append(content)
         self._project_registry.add_content_reference(content_type, qualified_id)
+        self.mark_project_as_modified()
 
     def remove_content(self, content_type: ContentType, content: Content[Any]) -> None:
         """Remove content from the active project and registry.
@@ -124,6 +159,7 @@ class ProjectService:
 
         project.content[content_type].remove(content)
         self._project_registry.remove_content_reference(content_type, qualified_id)
+        self.mark_project_as_modified()
 
     def _require_active_project(self) -> Project:
         """Return the active project.

@@ -95,6 +95,7 @@ def test_refresh_does_not_include_content_from_inactive_projects(
     first_project_id = first_project.qualified_id
 
     active_project_service.add_content(ContentType.MATERIALS, MaterialFactory.create(id="iron"))
+    active_project_service.save_project()
 
     active_project_service.create_project(namespace="other", name="Other Mod")
     project_ids = active_project_service.list_project_qualified_ids()
@@ -104,6 +105,7 @@ def test_refresh_does_not_include_content_from_inactive_projects(
 
     active_project_service.open_project(second_project_id)
     active_project_service.add_content(ContentType.MATERIALS, MaterialFactory.create(id="copper"))
+    active_project_service.save_project()
 
     active_project_service.open_project(first_project.qualified_id)
 

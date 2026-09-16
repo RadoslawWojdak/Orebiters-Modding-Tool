@@ -69,6 +69,11 @@ class MainWindow(QMainWindow):
             shortcut=QKeySequence.StandardKey.Save,
             icon=style.standardIcon(QStyle.StandardPixmap.SP_DialogSaveButton),
         )
+        self._refresh_projects_action = self._create_action(
+            "Refresh Projects",
+            self._refresh_projects,
+            icon=style.standardIcon(QStyle.StandardPixmap.SP_BrowserReload),
+        )
         self._exit_action = self._create_action(
             "Exit",
             self._exit_application,
@@ -138,6 +143,8 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self._new_action)
         file_menu.addAction(self._open_action)
         file_menu.addAction(self._save_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self._refresh_projects_action)
         file_menu.addSeparator()
         file_menu.addAction(self._exit_action)
 
@@ -235,6 +242,9 @@ class MainWindow(QMainWindow):
         if not accepted:
             return
 
+        if not self._confirm_unsaved_project_changes():
+            return
+
         try:
             project = self._project_service.open_project(qualified_id)
         except (
@@ -250,6 +260,41 @@ class MainWindow(QMainWindow):
 
         self._set_active_project(project)
 
+    def _confirm_unsaved_project_changes(self) -> bool:
+        """Confirm opening another project when the current project has unsaved changes.
+
+        :returns: True if opening the project should continue.
+        """
+        project = self._project_service.active_project
+
+        if project is None or not project.has_unsaved_changes:
+            return True
+
+        answer = QMessageBox.question(
+            self,
+            "Unsaved Changes",
+            f"Project '{project.name}' has unsaved changes.\n"
+            f"Do you want to save them before opening another project?",
+            QMessageBox.StandardButton.Yes
+            | QMessageBox.StandardButton.No
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+
+        if answer == QMessageBox.StandardButton.Cancel:
+            return False
+
+        if answer == QMessageBox.StandardButton.No:
+            return True
+
+        try:
+            self._project_service.save_project()
+        except OSError as error:
+            QMessageBox.critical(self, "Unable to Save Project", str(error))
+            return False
+
+        return True
+
     def _save_project(self) -> None:
         """Save the current project."""
         try:
@@ -259,6 +304,23 @@ class MainWindow(QMainWindow):
             return
 
         self._workspace.refresh_current_content_state()
+
+    def _refresh_projects(self) -> None:
+        """Refresh projects from persistent storage."""
+        try:
+            self._project_service.refresh_projects()
+        except (
+            FileNotFoundError,
+            PermissionError,
+            OSError,
+            ValueError,
+            KeyError,
+            json.JSONDecodeError,
+        ) as error:
+            QMessageBox.critical(self, "Unable to Refresh Projects", str(error))
+            return
+
+        self._project_explorer.refresh()
 
     def _exit_application(self) -> None:
         """Close the application."""

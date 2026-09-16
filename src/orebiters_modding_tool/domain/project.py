@@ -16,6 +16,8 @@ class Project:
         default_factory=lambda: {content_type: [] for content_type in ContentType}
     )
 
+    has_unsaved_changes: bool = False
+
     @property
     def qualified_id(self) -> str:
         """Return the globally qualified mod identifier.

@@ -60,6 +60,22 @@ class ProjectRegistry:
         self._projects.append(project)
         self._add_project_references(project)
 
+    def replace_project(self, project: Project) -> None:
+        """Replace a registered project.
+
+        :param project: Project replacing the existing registered project.
+        """
+        for index, existing_project in enumerate(self._projects):
+            if existing_project.qualified_id != project.qualified_id:
+                continue
+
+            self._projects[index] = project
+            self._remove_project_references(existing_project)
+            self._add_project_references(project)
+            return
+
+        self.add_project(project)
+
     def remove_project(self, project: Project) -> None:
         """Remove a project from the registry.
 
