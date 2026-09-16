@@ -42,6 +42,46 @@ def test_add_project_registers_project_and_content_references() -> None:
     )
 
 
+def test_replace_project_replaces_project_and_updates_content_references() -> None:
+    """Replace a project and update its content references."""
+    old_project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    old_material = MaterialFactory.create(id="clay")
+    old_project.content[ContentType.MATERIALS].append(old_material)
+
+    new_project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    new_material = MaterialFactory.create(id="stone")
+    new_project.content[ContentType.MATERIALS].append(new_material)
+
+    registry = ProjectRegistry([old_project])
+
+    registry.replace_project(new_project)
+
+    assert registry.projects == (new_project,)
+    assert registry.get_content_references(ContentType.MATERIALS) == (
+        ContentReferenceFactory.from_content(new_material, mod_id=new_project.qualified_id),
+    )
+    assert not registry.has_content_reference(
+        ContentType.MATERIALS,
+        f"{old_project.qualified_id}.clay",
+    )
+
+
+def test_replace_project_adds_unregistered_project() -> None:
+    """Add a project when no project with the same ID is registered."""
+    registry = ProjectRegistry()
+
+    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    material = MaterialFactory.create(id="clay")
+    project.content[ContentType.MATERIALS].append(material)
+
+    registry.replace_project(project)
+
+    assert registry.projects == (project,)
+    assert registry.get_content_references(ContentType.MATERIALS) == (
+        ContentReferenceFactory.from_content(material, mod_id=project.qualified_id),
+    )
+
+
 def test_remove_project_unregisters_project_and_content_references() -> None:
     """Remove a project and its content references."""
     project = Project(namespace="test", mod_id="test_mod", name="Test Mod")

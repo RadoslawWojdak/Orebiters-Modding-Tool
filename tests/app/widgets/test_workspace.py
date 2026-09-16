@@ -9,7 +9,11 @@ from orebiters_modding_tool.app.models.material_table_model import MaterialTable
 from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewWidget
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
-from orebiters_modding_tool.domain.content import ContentReference, ContentState, ContentType
+from orebiters_modding_tool.domain.content import (
+    ContentReference,
+    ContentState,
+    ContentType,
+)
 from orebiters_modding_tool.domain.material import Material
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
@@ -201,18 +205,20 @@ def test_create_content_adds_item_to_project_model_and_editor(
     materials_category_reference: ContentReference,
 ) -> None:
     """Add content to the project, update its model, and open its editor."""
+    project = workspace._project_service.active_project
+    assert project is not None
+    assert not project.has_unsaved_changes
+
     workspace.open_content(materials_category_reference)
     content_widget = workspace._get_content_widget(materials_category_reference)
 
     workspace._create_content(materials_category_reference, "iron_ore")
 
-    project = workspace._project_service.active_project
-    assert project is not None
-
     materials = project.content[ContentType.MATERIALS]
     assert len(materials) == 1
     assert isinstance(materials[0], Material)
     assert materials[0].id == "iron_ore"
+    assert project.has_unsaved_changes
 
     assert content_widget.model.rowCount() == 1
     assert content_widget.model.get_item(0) is materials[0]
@@ -352,11 +358,15 @@ def test_delete_content_removes_item_closes_editor_and_updates_model(
     assert project is not None
     material = project.content[ContentType.MATERIALS][0]
 
+    workspace._project_service.save_project()
+    assert not project.has_unsaved_changes
+
     workspace._delete_content(materials_category_reference, [material])
 
     assert project.content[ContentType.MATERIALS] == []
     assert content_widget.model.rowCount() == 0
     assert workspace._find_editor_tab(material) is None
+    assert project.has_unsaved_changes
 
 
 @patch(
@@ -478,6 +488,10 @@ def test_create_content_editor_connects_saved_signal(
     materials_category_reference: ContentReference,
 ) -> None:
     """Emit a content change when the created editor is saved."""
+    project = workspace._project_service.active_project
+    assert project is not None
+    assert not project.has_unsaved_changes
+
     item = MaterialFactory.create(id="iron_ore", state=ContentState.SAVED)
 
     editor = workspace._create_content_editor(materials_category_reference, item)
@@ -487,13 +501,11 @@ def test_create_content_editor_connects_saved_signal(
 
     editor.saved.emit()
 
-    project = workspace._project_service.active_project
-    assert project is not None
-
     assert received_references == [
         ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron_ore"),
     ]
     assert item.state is ContentState.MODIFIED
+    assert project.has_unsaved_changes
 
 
 def test_saving_content_emits_updated_content_reference(
@@ -535,9 +547,14 @@ def test_saving_saved_content_marks_it_as_modified(
     """Mark saved content as modified after editor save."""
     item = MaterialFactory.create(state=ContentState.SAVED)
 
+    project = workspace._project_service.active_project
+    assert project is not None
+    assert not project.has_unsaved_changes
+
     workspace._handle_content_editor_saved(materials_category_reference, item)
 
     assert item.state is ContentState.MODIFIED
+    assert project.has_unsaved_changes
 
 
 def test_saving_new_content_keeps_it_new(
@@ -547,9 +564,14 @@ def test_saving_new_content_keeps_it_new(
     """Keep new content marked as new after editor save."""
     item = MaterialFactory.create(state=ContentState.NEW)
 
+    project = workspace._project_service.active_project
+    assert project is not None
+    assert not project.has_unsaved_changes
+
     workspace._handle_content_editor_saved(materials_category_reference, item)
 
     assert item.state is ContentState.NEW
+    assert project.has_unsaved_changes
 
 
 def test_create_material_editor_context_contains_project_information(workspace: Workspace) -> None:

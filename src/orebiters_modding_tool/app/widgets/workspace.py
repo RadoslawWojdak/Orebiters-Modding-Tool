@@ -346,6 +346,8 @@ class Workspace(QWidget):
         if item.state is ContentState.SAVED:
             item.state = ContentState.MODIFIED
 
+        self._project_service.mark_project_as_modified()
+
         self.content_changed.emit(
             self._create_content_reference(content_reference.content_type, item)
         )
