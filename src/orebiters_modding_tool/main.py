@@ -14,6 +14,7 @@ from orebiters_modding_tool.services.project_service import ProjectService
 def main() -> None:
     """Start the application."""
     app = QApplication(sys.argv)
+    QApplication.setStyle("Fusion")
 
     mods_directory = Path.home() / "AppData" / "Roaming" / "Orebiters" / "mods"
 

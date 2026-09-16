@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
@@ -196,6 +198,16 @@ def test_content_visibility_updates_when_model_changes(qapp: QApplication) -> No
     assert widget._content_layout.currentWidget() is widget._table_view
     assert widget._edit_action.isEnabled()
     assert widget._delete_action.isEnabled()
+
+
+def test_refresh_content_states_refreshes_model(qapp: QApplication) -> None:
+    """Refresh content states through the content table model."""
+    widget = create_widget(create_materials())
+
+    with patch.object(widget.model, "refresh_content_states") as refresh_state:
+        widget.refresh_content_states()
+
+    refresh_state.assert_called_once()
 
 
 # =============================================================================

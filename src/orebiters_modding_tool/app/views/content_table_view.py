@@ -1,6 +1,7 @@
 from PySide6.QtCore import QAbstractItemModel, Qt
 from PySide6.QtWidgets import QTableView, QWidget
 
+from orebiters_modding_tool.app.delegates.content_table_delegate import ContentTableDelegate
 from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
     TableSortFilterProxyModel,
 )
@@ -32,6 +33,8 @@ class ContentTableView(QTableView):
         self.setSelectionMode(QTableView.SelectionMode.ExtendedSelection)
 
         self.setEditTriggers(QTableView.EditTrigger.NoEditTriggers)
+
+        self.setItemDelegate(ContentTableDelegate(self))
 
         header = self.horizontalHeader()
         header.setStretchLastSection(True)

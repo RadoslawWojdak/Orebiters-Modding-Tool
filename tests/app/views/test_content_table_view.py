@@ -2,10 +2,11 @@ from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QTableView
 
+from orebiters_modding_tool.app.delegates.content_table_delegate import ContentTableDelegate
 from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
     TableSortFilterProxyModel,
 )
-from orebiters_modding_tool.app.widgets.content_table_view import ContentTableView
+from orebiters_modding_tool.app.views.content_table_view import ContentTableView
 from tests.app.helpers.table import ItemSample, ItemSampleTableModel, create_items
 
 
@@ -60,6 +61,7 @@ def test_initializes_table_view(qapp: QApplication) -> None:
     assert table_view.selectionMode() == QTableView.SelectionMode.ExtendedSelection
     assert table_view.editTriggers() == QTableView.EditTrigger.NoEditTriggers
     assert table_view.horizontalHeader().stretchLastSection()
+    assert isinstance(table_view.itemDelegate(), ContentTableDelegate)
 
 
 def test_first_sortable_header_click_enables_sorting(qapp: QApplication) -> None:

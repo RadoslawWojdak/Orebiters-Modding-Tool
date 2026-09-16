@@ -97,14 +97,37 @@ def test_save_project_saves_active_project(
     project_service: ProjectService,
     qapp: QApplication,
 ) -> None:
-    """Save the active project through the project service."""
+    """Save the active project and refresh the current content state."""
     project_service.create_project("orebiters", "test")
     window = MainWindow(project_service)
 
-    with patch.object(project_service, "save_project") as save_project:
+    with (
+        patch.object(project_service, "save_project") as save_project,
+        patch.object(window._workspace, "refresh_current_content_state") as refresh_state,
+    ):
         window._save_project()
 
     save_project.assert_called_once()
+    refresh_state.assert_called_once()
+
+
+def test_save_project_does_not_refresh_content_state_on_failure(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Do not refresh the content state when saving the project fails."""
+    project_service.create_project("orebiters", "test")
+    window = MainWindow(project_service)
+
+    with (
+        patch.object(project_service, "save_project", side_effect=OSError("Save failed")),
+        patch("orebiters_modding_tool.app.main_window.QMessageBox.critical") as critical,
+        patch.object(window._workspace, "refresh_current_content_state") as refresh_state,
+    ):
+        window._save_project()
+
+    critical.assert_called_once_with(window, "Unable to Save Project", "Save failed")
+    refresh_state.assert_not_called()
 
 
 def test_save_project_shows_error_on_failure(

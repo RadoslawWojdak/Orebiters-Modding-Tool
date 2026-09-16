@@ -5,11 +5,11 @@ from PySide6.QtCore import QAbstractProxyModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QAction, QFont, QIcon, QKeySequence
 from PySide6.QtWidgets import QLabel, QLineEdit, QStackedLayout, QToolBar, QVBoxLayout, QWidget
 
-from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
+from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
     TableSortFilterProxyModel,
 )
-from orebiters_modding_tool.app.widgets.content_table_view import ContentTableView
+from orebiters_modding_tool.app.views.content_table_view import ContentTableView
 from orebiters_modding_tool.domain.content import Content, ContentReference
 
 
@@ -36,7 +36,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         self,
         content_reference: ContentReference,
         config: ContentOverviewConfig,
-        model: BaseTableModel[T],
+        model: ContentTableModel[T],
         parent: QWidget | None = None,
     ) -> None:
         """Initialize the content overview.
@@ -70,12 +70,16 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         return self._content_reference
 
     @property
-    def model(self) -> BaseTableModel[T]:
+    def model(self) -> ContentTableModel[T]:
         """Return the table model.
 
         :returns: Table model used by the overview.
         """
         return self._model
+
+    def refresh_content_states(self) -> None:
+        """Refresh the displayed content states."""
+        self._model.refresh_content_states()
 
     # =========================================================================
     # Setup

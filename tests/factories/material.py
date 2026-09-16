@@ -1,3 +1,4 @@
+from orebiters_modding_tool.domain.content import ContentState
 from orebiters_modding_tool.domain.material import (
     Material,
     MaterialLocalization,
@@ -17,12 +18,14 @@ class MaterialFactory:
         id: str | None = None,
         localizations: dict[str, MaterialLocalization] | None = None,
         crafting_materials: list[MaterialRequirement] | None = None,
+        state: ContentState = ContentState.SAVED,
     ) -> Material:
         """Create a material.
 
         :param id: Local material ID.
         :param localizations: Localized material text.
         :param crafting_materials: Materials required for crafting.
+        :param state: Current persistence state of the material.
         :returns: Created material.
         """
         if id is None:
@@ -47,4 +50,5 @@ class MaterialFactory:
             id=id,
             localizations=localizations,
             crafting_materials=crafting_materials,
+            state=state,
         )
