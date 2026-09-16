@@ -6,14 +6,19 @@ from PySide6.QtWidgets import QMessageBox, QTabWidget, QVBoxLayout, QWidget
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
-from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
+from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewConfig,
     ContentOverviewWidget,
 )
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
-from orebiters_modding_tool.domain.content import Content, ContentReference, ContentType
+from orebiters_modding_tool.domain.content import (
+    Content,
+    ContentReference,
+    ContentState,
+    ContentType,
+)
 from orebiters_modding_tool.domain.material import Material, MaterialLocalization
 from orebiters_modding_tool.services.project_service import ProjectService
 
@@ -31,6 +36,13 @@ class Workspace(QWidget):
         self._setup_layout()
         self._setup_tab_widget()
         self._setup_welcome_tab()
+
+    def refresh_current_content_state(self) -> None:
+        """Refresh the content state display of the current tab."""
+        widget = self._tab_widget.currentWidget()
+
+        if isinstance(widget, ContentOverviewWidget):
+            widget.refresh_content_states()
 
     def close_project_tabs(self) -> None:
         """Close all project-related tabs."""
@@ -139,7 +151,7 @@ class Workspace(QWidget):
 
         return content_widget
 
-    def _create_content_model(self, content_reference: ContentReference) -> BaseTableModel[Any]:
+    def _create_content_model(self, content_reference: ContentReference) -> ContentTableModel[Any]:
         """Create a table model for the specified content.
 
         :param content_reference: Reference to the content.
@@ -269,6 +281,7 @@ class Workspace(QWidget):
                         "pl": MaterialLocalization(),
                     },
                     crafting_materials=[],
+                    state=ContentState.NEW,
                 )
 
             case _:
@@ -299,7 +312,7 @@ class Workspace(QWidget):
             case _:
                 raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
 
-        editor.saved.connect(lambda: self._handle_content_saved(content_reference, item))
+        editor.saved.connect(lambda: self._handle_content_editor_saved(content_reference, item))
 
         return editor
 
@@ -320,16 +333,19 @@ class Workspace(QWidget):
             ),
         }
 
-    def _handle_content_saved(
+    def _handle_content_editor_saved(
         self,
         content_reference: ContentReference,
         item: Content[Any],
     ) -> None:
-        """Handle saved content.
+        """Handle content saved from its editor.
 
         :param content_reference: Reference used to open the content.
-        :param item: Saved content item.
+        :param item: Content item saved by the editor.
         """
+        if item.state is ContentState.SAVED:
+            item.state = ContentState.MODIFIED
+
         self.content_changed.emit(
             self._create_content_reference(content_reference.content_type, item)
         )
@@ -381,7 +397,7 @@ class Workspace(QWidget):
         return widget
 
     @staticmethod
-    def _find_item_row(model: BaseTableModel[Any], item: Content[Any]) -> int | None:
+    def _find_item_row(model: ContentTableModel[Any], item: Content[Any]) -> int | None:
         """Find the row containing an item.
 
         :param model: Table model.

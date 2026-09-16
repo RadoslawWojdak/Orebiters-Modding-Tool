@@ -256,6 +256,9 @@ class MainWindow(QMainWindow):
             self._project_service.save_project()
         except OSError as error:
             QMessageBox.critical(self, "Unable to Save Project", str(error))
+            return
+
+        self._workspace.refresh_current_content_state()
 
     def _exit_application(self) -> None:
         """Close the application."""

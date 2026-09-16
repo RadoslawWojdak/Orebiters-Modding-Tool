@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from orebiters_modding_tool.domain.content import ContentReference, ContentType
+from orebiters_modding_tool.domain.content import ContentReference, ContentState, ContentType
 from orebiters_modding_tool.domain.material import Material, MaterialRequirement
 from orebiters_modding_tool.domain.project import Project
 
@@ -76,6 +76,8 @@ class MaterialRepository:
 
         with material_file_path.open("w", encoding="utf-8") as file:
             json.dump(data, file, ensure_ascii=False, indent=4)
+
+        material.state = ContentState.SAVED
 
     def delete(self, project: Project, material_id: str) -> None:
         """Delete a material from a project.

@@ -1,9 +1,9 @@
-from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
 from orebiters_modding_tool.app.models.column import Column
+from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.domain.material import Material
 
 
-class MaterialTableModel(BaseTableModel[Material]):
+class MaterialTableModel(ContentTableModel[Material]):
     """Table model for materials."""
 
     COLUMNS = (

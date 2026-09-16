@@ -9,7 +9,7 @@ from orebiters_modding_tool.app.models.material_table_model import MaterialTable
 from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewWidget
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
-from orebiters_modding_tool.domain.content import ContentReference, ContentType
+from orebiters_modding_tool.domain.content import ContentReference, ContentState, ContentType
 from orebiters_modding_tool.domain.material import Material
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
@@ -148,6 +148,39 @@ def test_create_content_model_raises_without_active_project(
 
     with pytest.raises(RuntimeError, match="No active project."):
         workspace._create_content_model(materials_category_reference)
+
+
+def test_refresh_current_content_state_refreshes_current_content_tab(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Refresh the content state of the current content tab."""
+    workspace.open_content(materials_category_reference)
+
+    widget = workspace._tab_widget.currentWidget()
+    assert isinstance(widget, ContentOverviewWidget)
+
+    with patch.object(widget, "refresh_content_states") as refresh_state:
+        workspace.refresh_current_content_state()
+
+    refresh_state.assert_called_once()
+
+
+def test_refresh_current_content_state_does_nothing_for_editor_tab(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Do nothing when the current tab is a content editor."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    editor = workspace._tab_widget.currentWidget()
+    assert isinstance(editor, BaseEditorWidget)
+
+    with patch.object(editor, "refresh") as refresh:
+        workspace.refresh_current_content_state()
+
+    refresh.assert_not_called()
 
 
 @patch("orebiters_modding_tool.app.widgets.workspace.ContentIdDialog")
@@ -395,6 +428,7 @@ def test_create_content_item_creates_material(
     assert item.id == "iron_ore"
     assert set(item.localizations) == {"en", "pl"}
     assert item.crafting_materials == []
+    assert item.state is ContentState.NEW
 
 
 def test_create_content_item_raises_for_unsupported_content_type() -> None:
@@ -444,7 +478,7 @@ def test_create_content_editor_connects_saved_signal(
     materials_category_reference: ContentReference,
 ) -> None:
     """Emit a content change when the created editor is saved."""
-    item = MaterialFactory.create(id="iron_ore")
+    item = MaterialFactory.create(id="iron_ore", state=ContentState.SAVED)
 
     editor = workspace._create_content_editor(materials_category_reference, item)
 
@@ -459,6 +493,7 @@ def test_create_content_editor_connects_saved_signal(
     assert received_references == [
         ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron_ore"),
     ]
+    assert item.state is ContentState.MODIFIED
 
 
 def test_saving_content_emits_updated_content_reference(
@@ -491,6 +526,30 @@ def test_saving_content_emits_updated_content_reference(
         content_type=ContentType.MATERIALS,
         qualified_id="test.test_mod.refined_iron",
     )
+
+
+def test_saving_saved_content_marks_it_as_modified(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Mark saved content as modified after editor save."""
+    item = MaterialFactory.create(state=ContentState.SAVED)
+
+    workspace._handle_content_editor_saved(materials_category_reference, item)
+
+    assert item.state is ContentState.MODIFIED
+
+
+def test_saving_new_content_keeps_it_new(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Keep new content marked as new after editor save."""
+    item = MaterialFactory.create(state=ContentState.NEW)
+
+    workspace._handle_content_editor_saved(materials_category_reference, item)
+
+    assert item.state is ContentState.NEW
 
 
 def test_create_material_editor_context_contains_project_information(workspace: Workspace) -> None:

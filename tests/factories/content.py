@@ -4,6 +4,7 @@ from orebiters_modding_tool.domain.content import (
     Content,
     ContentLocalization,
     ContentReference,
+    ContentState,
     ContentType,
 )
 
@@ -53,3 +54,39 @@ class ContentReferenceFactory:
             content_type=content.CONTENT_TYPE,
             qualified_id=content.get_qualified_id(mod_id),
         )
+
+
+class ContentFactory:
+    """Create content for tests."""
+
+    _counter = 0
+
+    @classmethod
+    def create(
+        cls,
+        *,
+        id: str | None = None,
+        localizations: dict[str, ContentLocalization] | None = None,
+        state: ContentState = ContentState.SAVED,
+    ) -> Content[ContentLocalization]:
+        """Create content.
+
+        :param id: Local content ID.
+        :param localizations: Localized content text.
+        :param state: Current persistence state of the content.
+        :returns: Created content.
+        """
+        if id is None:
+            cls._counter += 1
+            id = f"content_{cls._counter}"
+
+        if localizations is None:
+            localizations = {
+                "en": ContentLocalization(
+                    one=id.replace("_", " ").title(),
+                    few=id.replace("_", " ").title(),
+                    many=id.replace("_", " ").title(),
+                ),
+            }
+
+        return Content(id=id, localizations=localizations, state=state)

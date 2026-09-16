@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, auto
 from typing import ClassVar
 
 
@@ -9,6 +9,14 @@ class ContentType(Enum):
     ITEMS = "items"
     MATERIALS = "materials"
     RESOURCES = "resources"
+
+
+class ContentState(Enum):
+    """State of content within the editor."""
+
+    SAVED = auto()
+    NEW = auto()
+    MODIFIED = auto()
 
 
 @dataclass(slots=True, kw_only=True)
@@ -80,6 +88,8 @@ class Content[TLocalization: ContentLocalization]:
 
     id: str
     localizations: dict[str, TLocalization]
+
+    state: ContentState = ContentState.SAVED
 
     def get_qualified_id(self, mod_qualified_id: str) -> str:
         """Build a fully qualified content ID.

@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from orebiters_modding_tool.domain.content import ContentState
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from tests.factories.content import ContentReferenceFactory
@@ -120,3 +121,17 @@ def test_save_overwrites_existing_material(tmp_path: Path) -> None:
     loaded_material = repository.load(project, material.id)
 
     assert loaded_material.crafting_materials == material.crafting_materials
+
+
+def test_save_sets_material_state_to_saved(tmp_path: Path) -> None:
+    """Set the material state to saved after saving."""
+    repository = MaterialRepository(tmp_path)
+
+    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+
+    material = MaterialFactory.create(id="clay")
+    material.state = ContentState.MODIFIED
+
+    repository.save(project, material)
+
+    assert material.state is ContentState.SAVED
