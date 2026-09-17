@@ -1,7 +1,9 @@
+from typing import Any
 from unittest.mock import patch
 
 import pytest
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtWidgets import QMessageBox, QScrollArea
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
@@ -10,6 +12,7 @@ from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewW
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import (
+    Content,
     ContentReference,
     ContentState,
     ContentType,
@@ -17,6 +20,22 @@ from orebiters_modding_tool.domain.content import (
 from orebiters_modding_tool.domain.material import Material
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+
+
+def _get_editor_tab(
+    workspace: Workspace, item: Content[Any]
+) -> tuple[int, QScrollArea, BaseEditorWidget]:
+    """Return the tab, scroll area, and editor for a material."""
+    index = workspace._find_editor_tab(item)
+    assert index is not None
+
+    editor_tab = workspace._tab_widget.widget(index)
+    assert isinstance(editor_tab, QScrollArea)
+
+    editor = editor_tab.widget()
+    assert isinstance(editor, BaseEditorWidget)
+
+    return index, editor_tab, editor
 
 
 def test_initializes_workspace(workspace: Workspace) -> None:
@@ -57,11 +76,11 @@ def test_open_content_activates_existing_content_tab(
     assert workspace._tab_widget.currentIndex() == 1
 
 
-def test_open_content_creates_editor_for_specific_content(
+def test_open_content_creates_scrollable_editor_for_specific_content(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
-    """Open an editor when opening a reference to specific content."""
+    """Open the selected material editor inside one scroll area."""
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
 
@@ -70,7 +89,6 @@ def test_open_content_creates_editor_for_specific_content(
     material = project.content[ContentType.MATERIALS][0]
 
     workspace._tab_widget.setCurrentIndex(0)
-
     workspace.open_content(
         ContentReferenceFactory.create(
             content_type=ContentType.MATERIALS,
@@ -78,10 +96,13 @@ def test_open_content_creates_editor_for_specific_content(
         ),
     )
 
-    current_widget = workspace._tab_widget.currentWidget()
+    editor_tab = workspace._tab_widget.currentWidget()
+    assert isinstance(editor_tab, QScrollArea)
 
-    assert isinstance(current_widget, MaterialEditorWidget)
-    assert current_widget.item is material
+    widget = editor_tab.widget()
+    assert isinstance(widget, MaterialEditorWidget)
+    assert widget.item is material
+    assert widget.parentWidget() is editor_tab.viewport()
 
 
 def test_open_content_activates_existing_editor_for_specific_content(
@@ -95,12 +116,10 @@ def test_open_content_activates_existing_editor_for_specific_content(
     project = workspace._project_service.active_project
     assert project is not None
     material = project.content[ContentType.MATERIALS][0]
-
     reference = ContentReferenceFactory.create(
         content_type=ContentType.MATERIALS,
         qualified_id=material.get_qualified_id(project.qualified_id),
     )
-
     initial_tab_count = workspace._tab_widget.count()
 
     workspace._tab_widget.setCurrentIndex(0)
@@ -108,9 +127,8 @@ def test_open_content_activates_existing_editor_for_specific_content(
     workspace.open_content(reference)
 
     assert workspace._tab_widget.count() == initial_tab_count
-    assert workspace._tab_widget.currentWidget() is workspace._tab_widget.widget(
-        initial_tab_count - 1,
-    )
+    assert workspace._tab_widget.currentIndex() == initial_tab_count - 1
+    _get_editor_tab(workspace, material)
 
 
 def test_open_content_raises_for_missing_content(workspace: Workspace) -> None:
@@ -178,8 +196,10 @@ def test_refresh_current_content_state_does_nothing_for_editor_tab(
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
 
-    editor = workspace._tab_widget.currentWidget()
-    assert isinstance(editor, BaseEditorWidget)
+    _, _, editor = _get_editor_tab(
+        workspace,
+        workspace._project_service.active_project.content[ContentType.MATERIALS][0],
+    )
 
     with patch.object(editor, "refresh") as refresh:
         workspace.refresh_current_content_state()
@@ -200,11 +220,11 @@ def test_add_content_opens_content_id_dialog(
     dialog_class.return_value.exec.assert_called_once()
 
 
-def test_create_content_adds_item_to_project_model_and_editor(
+def test_create_content_adds_item_to_project_model_and_scrollable_editor(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
-    """Add content to the project, update its model, and open its editor."""
+    """Add content to the project and model, then open its scrollable editor."""
     project = workspace._project_service.active_project
     assert project is not None
     assert not project.has_unsaved_changes
@@ -219,13 +239,15 @@ def test_create_content_adds_item_to_project_model_and_editor(
     assert isinstance(materials[0], Material)
     assert materials[0].id == "iron_ore"
     assert project.has_unsaved_changes
-
     assert content_widget.model.rowCount() == 1
     assert content_widget.model.get_item(0) is materials[0]
 
-    current_widget = workspace._tab_widget.currentWidget()
-    assert isinstance(current_widget, BaseEditorWidget)
-    assert current_widget.item is materials[0]
+    _, scroll_area, editor = _get_editor_tab(workspace, materials[0])
+    assert workspace._tab_widget.currentWidget() is scroll_area
+    assert editor.item is materials[0]
+    assert scroll_area.widgetResizable()
+    assert scroll_area.verticalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
+    assert scroll_area.horizontalScrollBarPolicy() == Qt.ScrollBarPolicy.ScrollBarAsNeeded
 
 
 def test_create_content_emits_content_changed(
@@ -240,26 +262,23 @@ def test_create_content_emits_content_changed(
 
     workspace._create_content(materials_category_reference, "iron_ore")
 
-    project = workspace._project_service.active_project
-    assert project is not None
-
     assert received_references == [
         ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron_ore"),
     ]
 
 
-def test_edit_content_opens_editor_for_new_item(
+def test_edit_content_opens_scrollable_editor_for_new_item(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
-    """Open an editor for a content item without an existing editor."""
+    """Open a scrollable editor for an item without an existing editor."""
     material = MaterialFactory.create()
 
     workspace._edit_content(materials_category_reference, [material])
 
-    current_widget = workspace._tab_widget.currentWidget()
-    assert isinstance(current_widget, BaseEditorWidget)
-    assert current_widget.item is material
+    _, scroll_area, editor = _get_editor_tab(workspace, material)
+    assert workspace._tab_widget.currentWidget() is scroll_area
+    assert editor.item is material
 
 
 def test_edit_content_opens_editor_without_duplicate(
@@ -273,29 +292,26 @@ def test_edit_content_opens_editor_without_duplicate(
     project = workspace._project_service.active_project
     assert project is not None
     material = project.content[ContentType.MATERIALS][0]
-
     initial_tab_count = workspace._tab_widget.count()
 
     workspace._edit_content(materials_category_reference, [material])
     workspace._edit_content(materials_category_reference, [material])
 
     assert workspace._tab_widget.count() == initial_tab_count
-
-    editors = [
-        workspace._tab_widget.widget(index)
+    matching_tabs = [
+        index
         for index in range(workspace._tab_widget.count())
-        if isinstance(workspace._tab_widget.widget(index), BaseEditorWidget)
+        if workspace._get_editor_from_tab(workspace._tab_widget.widget(index)) is not None
+        and workspace._get_editor_from_tab(workspace._tab_widget.widget(index)).item is material
     ]
-
-    assert len(editors) == 1
-    assert editors[0].item is material
+    assert len(matching_tabs) == 1
 
 
 def test_edit_content_opens_editors_for_multiple_items(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
-    """Open an editor for each selected content item."""
+    """Open one scrollable editor tab for each selected content item."""
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
     workspace._create_content(materials_category_reference, "copper_ore")
@@ -307,13 +323,18 @@ def test_edit_content_opens_editors_for_multiple_items(
     workspace._edit_content(materials_category_reference, materials)
 
     editors = [
-        workspace._tab_widget.widget(index)
+        workspace._get_editor_from_tab(workspace._tab_widget.widget(index))
         for index in range(workspace._tab_widget.count())
-        if isinstance(workspace._tab_widget.widget(index), BaseEditorWidget)
     ]
+    editors = [editor for editor in editors if editor is not None]
 
     assert len(editors) == 2
     assert [editor.item for editor in editors] == materials
+    assert all(
+        isinstance(workspace._tab_widget.widget(index), QScrollArea)
+        for index in range(workspace._tab_widget.count())
+        if workspace._get_editor_from_tab(workspace._tab_widget.widget(index)) is not None
+    )
 
 
 @patch(
@@ -493,7 +514,6 @@ def test_create_content_editor_connects_saved_signal(
     assert not project.has_unsaved_changes
 
     item = MaterialFactory.create(id="iron_ore", state=ContentState.SAVED)
-
     editor = workspace._create_content_editor(materials_category_reference, item)
 
     received_references: list[ContentReference] = []
@@ -519,19 +539,12 @@ def test_saving_content_emits_updated_content_reference(
     project = workspace._project_service.active_project
     assert project is not None
     material = project.content[ContentType.MATERIALS][0]
-
-    editor = workspace._find_editor_tab(material)
-    assert editor is not None
-    assert isinstance(workspace._tab_widget.widget(editor), BaseEditorWidget)
-
-    editor_widget = workspace._tab_widget.widget(editor)
-    assert isinstance(editor_widget, BaseEditorWidget)
+    _, _, editor_widget = _get_editor_tab(workspace, material)
 
     received_references: list[ContentReference] = []
     workspace.content_changed.connect(received_references.append)
 
     material.id = "refined_iron"
-
     editor_widget.saved.emit()
 
     assert received_references[-1] == ContentReference(
@@ -643,7 +656,6 @@ def test_find_item_row_returns_matching_item_row() -> None:
     """Return the row containing the requested item."""
     item = MaterialFactory.create()
     other_item = MaterialFactory.create()
-
     model = MaterialTableModel([item, other_item])
 
     assert Workspace._find_item_row(model, other_item) == 1
@@ -653,7 +665,6 @@ def test_find_item_row_returns_none_for_missing_item() -> None:
     """Return none when the requested item is not in the model."""
     item = MaterialFactory.create()
     model = MaterialTableModel([item])
-
     missing_item = MaterialFactory.create()
 
     assert Workspace._find_item_row(model, missing_item) is None
@@ -667,12 +678,14 @@ def test_switching_to_editor_tab_refreshes_editor(
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
 
-    editor = workspace._tab_widget.currentWidget()
-    assert isinstance(editor, BaseEditorWidget)
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+    _, scroll_area, editor = _get_editor_tab(workspace, material)
 
     with patch.object(editor, "refresh") as refresh:
         workspace._tab_widget.setCurrentIndex(0)
-        workspace._tab_widget.setCurrentWidget(editor)
+        workspace._tab_widget.setCurrentWidget(scroll_area)
 
     refresh.assert_called_once()
 
@@ -721,11 +734,11 @@ def test_close_editor_tab_ignores_missing_editor(workspace: Workspace) -> None:
     assert workspace._tab_widget.count() == 1
 
 
-def test_find_editor_tab_returns_matching_editor(
+def test_find_editor_tab_returns_matching_scroll_area(
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
-    """Return the tab index for an open content editor."""
+    """Find the scroll-area tab containing the requested content editor."""
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
 
@@ -736,7 +749,8 @@ def test_find_editor_tab_returns_matching_editor(
     index = workspace._find_editor_tab(material)
 
     assert index is not None
-    assert isinstance(workspace._tab_widget.widget(index), BaseEditorWidget)
+    assert isinstance(workspace._tab_widget.widget(index), QScrollArea)
+    assert workspace._get_editor_from_tab(workspace._tab_widget.widget(index)).item is material
 
 
 def test_find_editor_tab_returns_none_for_missing_editor(workspace: Workspace) -> None:
@@ -744,6 +758,32 @@ def test_find_editor_tab_returns_none_for_missing_editor(workspace: Workspace) -
     item = MaterialFactory.create()
 
     assert workspace._find_editor_tab(item) is None
+
+
+def test_get_editor_from_tab_returns_direct_editor(workspace: Workspace) -> None:
+    """Return an editor when given a direct editor widget."""
+    editor = workspace._create_content_editor(
+        ContentReferenceFactory.create(content_type=ContentType.MATERIALS),
+        MaterialFactory.create(),
+    )
+
+    assert Workspace._get_editor_from_tab(editor) is editor
+
+
+def test_get_editor_from_tab_returns_editor_inside_scroll_area(workspace: Workspace) -> None:
+    """Return the editor contained in a scroll-area tab."""
+    editor = workspace._create_content_editor(
+        ContentReferenceFactory.create(content_type=ContentType.MATERIALS),
+        MaterialFactory.create(),
+    )
+    scroll_area = workspace._create_editor_tab(editor)
+
+    assert Workspace._get_editor_from_tab(scroll_area) is editor
+
+
+def test_get_editor_from_tab_returns_none_for_non_editor_tab(workspace: Workspace) -> None:
+    """Return none for a tab that does not contain an editor."""
+    assert Workspace._get_editor_from_tab(WelcomeWidget()) is None
 
 
 def test_get_editor_tab_name_returns_item_id() -> None:

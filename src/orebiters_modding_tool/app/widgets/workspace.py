@@ -1,7 +1,7 @@
 from typing import Any, cast
 
-from PySide6.QtCore import Signal
-from PySide6.QtWidgets import QMessageBox, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
@@ -49,7 +49,11 @@ class Workspace(QWidget):
         for index in reversed(range(self._tab_widget.count())):
             widget = self._tab_widget.widget(index)
 
-            if isinstance(widget, (ContentOverviewWidget, BaseEditorWidget)):
+            if isinstance(widget, ContentOverviewWidget):
+                self._close_tab(index)
+                continue
+
+            if widget is not None and self._get_editor_from_tab(widget) is not None:
                 self._close_tab(index)
 
     def _setup_layout(self) -> None:
@@ -204,8 +208,8 @@ class Workspace(QWidget):
         )
 
         editor = self._create_content_editor(content_reference, item)
-
-        tab_index = self._tab_widget.addTab(editor, self._get_editor_tab_name(item))
+        editor_tab = self._create_editor_tab(editor)
+        tab_index = self._tab_widget.addTab(editor_tab, self._get_editor_tab_name(item))
         self._tab_widget.setCurrentIndex(tab_index)
 
     def _edit_content(self, content_reference: ContentReference, items: list[Content[Any]]) -> None:
@@ -222,8 +226,8 @@ class Workspace(QWidget):
                 continue
 
             editor = self._create_content_editor(content_reference, item)
-
-            tab_index = self._tab_widget.addTab(editor, self._get_editor_tab_name(item))
+            editor_tab = self._create_editor_tab(editor)
+            tab_index = self._tab_widget.addTab(editor_tab, self._get_editor_tab_name(item))
             self._tab_widget.setCurrentIndex(tab_index)
 
     def _delete_content(
@@ -315,6 +319,20 @@ class Workspace(QWidget):
         editor.saved.connect(lambda: self._handle_content_editor_saved(content_reference, item))
 
         return editor
+
+    def _create_editor_tab(self, editor: BaseEditorWidget[Any]) -> QScrollArea:
+        """Wrap an editor in a single scroll area.
+
+        :param editor: Editor widget to wrap.
+        :returns: Scroll area containing the complete editor.
+        """
+        scroll_area = QScrollArea(self)
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll_area.setWidget(editor)
+
+        return scroll_area
 
     def _create_material_editor_context(self) -> dict[str, object]:
         """Create context required by the material editor.
@@ -415,9 +433,13 @@ class Workspace(QWidget):
     def _refresh_current_tab(self, index: int) -> None:
         """Refresh the currently active tab."""
         widget = self._tab_widget.widget(index)
+        if widget is None:
+            return
 
-        if isinstance(widget, BaseEditorWidget):
-            widget.refresh()
+        editor = self._get_editor_from_tab(widget)
+
+        if editor is not None:
+            editor.refresh()
 
     def _find_content_tab(self, content_reference: ContentReference) -> int | None:
         """Find an open tab for the specified content.
@@ -454,9 +476,31 @@ class Workspace(QWidget):
         """
         for index in range(self._tab_widget.count()):
             widget = self._tab_widget.widget(index)
+            if widget is None:
+                continue
 
-            if isinstance(widget, BaseEditorWidget) and widget.item is item:
+            editor = self._get_editor_from_tab(widget)
+
+            if editor is not None and editor.item is item:
                 return index
+
+        return None
+
+    @staticmethod
+    def _get_editor_from_tab(widget: QWidget) -> BaseEditorWidget[Any] | None:
+        """Return the editor contained in a tab.
+
+        :param widget: Tab widget.
+        :returns: Editor if the tab contains one, otherwise None.
+        """
+        if isinstance(widget, BaseEditorWidget):
+            return widget
+
+        if isinstance(widget, QScrollArea):
+            content_widget = widget.widget()
+
+            if isinstance(content_widget, BaseEditorWidget):
+                return content_widget
 
         return None
 
