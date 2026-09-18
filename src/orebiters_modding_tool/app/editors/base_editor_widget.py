@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from enum import Enum
+from typing import Any, ClassVar
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -19,10 +20,15 @@ from orebiters_modding_tool.app.editors.editor_field import EditorField
 from orebiters_modding_tool.app.widgets.dictionary_widget import DictionaryWidget
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
+from orebiters_modding_tool.domain.content import ContentType
 
 
 class BaseEditorWidget[T](QWidget):
     """Base widget for editing object properties."""
+
+    CONTENT_TYPE: ClassVar[ContentType | None] = None
+
+    _registry: ClassVar[dict[ContentType, type[BaseEditorWidget[Any]]]] = {}
 
     SECTION_SPACING = 12
 
@@ -56,9 +62,24 @@ class BaseEditorWidget[T](QWidget):
 
         self._setup_fields()
 
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Register concrete editor subclasses."""
+        super().__init_subclass__(**kwargs)
+        cls._register()
+
     # =========================================================================
     # Public API
     # =========================================================================
+
+    @classmethod
+    def get_class(cls, content_type: ContentType) -> type[BaseEditorWidget[Any]]:
+        """Get the editor class for a content type.
+
+        :param content_type: Type of content to edit.
+        :returns: Registered editor class.
+        :raises KeyError: If no editor is registered for the content type.
+        """
+        return cls._registry[content_type]
 
     @property
     def item(self) -> T:
@@ -531,3 +552,16 @@ class BaseEditorWidget[T](QWidget):
 
             for index in range(field.item_count()):
                 self._refresh_field(field.item_at(index))
+
+    @classmethod
+    def _register(cls) -> None:
+        """Register the editor class."""
+        content_type = cls.__dict__.get("CONTENT_TYPE")
+
+        if content_type is None:
+            return
+
+        if content_type in BaseEditorWidget._registry:
+            raise ValueError(f"Editor for content type '{content_type}' is already registered.")
+
+        BaseEditorWidget._registry[content_type] = cls

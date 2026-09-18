@@ -9,6 +9,10 @@ from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
 
 
+def generate_expected_rows() -> list[str]:
+    return [content_type.display_name for content_type in ContentType]
+
+
 def test_initializes_project_explorer(qapp: QApplication, project_service: ProjectService) -> None:
     """Initialize the Project Explorer with its expected UI structure."""
     explorer = ProjectExplorer(project_service)
@@ -57,12 +61,12 @@ def test_refresh_creates_all_content_categories(
     """Create all content categories when refreshing the Project Explorer."""
     explorer = ProjectExplorer(project_service)
 
-    assert explorer._model.rowCount() == 3
-    assert [explorer._model.item(row).text() for row in range(explorer._model.rowCount())] == [
-        "Items",
-        "Materials",
-        "Resources",
-    ]
+    expected_rows = generate_expected_rows()
+
+    assert explorer._model.rowCount() == len(expected_rows)
+    assert [
+        explorer._model.item(row).text() for row in range(explorer._model.rowCount())
+    ] == expected_rows
 
 
 def test_refresh_creates_content_items_for_active_project(
@@ -75,7 +79,8 @@ def test_refresh_creates_content_items_for_active_project(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
     assert materials_item.text() == "Materials"
@@ -111,7 +116,8 @@ def test_refresh_does_not_include_content_from_inactive_projects(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
     assert materials_item.rowCount() == 1
@@ -131,7 +137,8 @@ def test_refresh_sorts_content_items_alphabetically(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
     assert [materials_item.child(row).text() for row in range(materials_item.rowCount())] == [
@@ -155,7 +162,8 @@ def test_refresh_sorts_content_items_case_insensitively(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
     assert [materials_item.child(row).text() for row in range(materials_item.rowCount())] == [
@@ -241,7 +249,8 @@ def test_double_click_emits_category_reference_for_content_category(
     """Emit a category reference when double-clicking a content category."""
     explorer = ProjectExplorer(project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
 
@@ -264,7 +273,8 @@ def test_double_click_emits_content_reference_for_content_item(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
 
@@ -327,7 +337,8 @@ def test_refresh_preserves_expanded_content_categories(
 
     explorer = ProjectExplorer(active_project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
 
@@ -336,7 +347,7 @@ def test_refresh_preserves_expanded_content_categories(
 
     explorer.refresh()
 
-    refreshed_materials_item = explorer._model.item(1)
+    refreshed_materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert refreshed_materials_item is not None
     assert explorer._tree_view.isExpanded(refreshed_materials_item.index())
@@ -349,8 +360,9 @@ def test_get_expanded_categories_returns_expanded_content_types(
     """Return content types of currently expanded categories."""
     explorer = ProjectExplorer(project_service)
 
-    materials_item = explorer._model.item(1)
-    resources_item = explorer._model.item(2)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
+    resources_item = explorer._model.item(expected_rows.index("Resources"))
 
     assert materials_item is not None
     assert resources_item is not None
@@ -368,7 +380,8 @@ def test_get_expanded_categories_ignores_collapsed_categories(
     """Ignore content categories that are currently collapsed."""
     explorer = ProjectExplorer(project_service)
 
-    materials_item = explorer._model.item(1)
+    expected_rows = generate_expected_rows()
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
 
     assert materials_item is not None
 
@@ -384,9 +397,10 @@ def test_restore_expanded_categories_expands_requested_content_types(
 
     explorer._restore_expanded_categories({ContentType.ITEMS, ContentType.RESOURCES})
 
-    items_item = explorer._model.item(0)
-    materials_item = explorer._model.item(1)
-    resources_item = explorer._model.item(2)
+    expected_rows = generate_expected_rows()
+    items_item = explorer._model.item(expected_rows.index("Items"))
+    materials_item = explorer._model.item(expected_rows.index("Materials"))
+    resources_item = explorer._model.item(expected_rows.index("Resources"))
 
     assert items_item is not None
     assert materials_item is not None

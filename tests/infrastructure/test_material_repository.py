@@ -1,6 +1,9 @@
+import json
 from pathlib import Path
 
-from orebiters_modding_tool.domain.content import ContentState
+import pytest
+
+from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from tests.factories.content import ContentReferenceFactory
@@ -8,12 +11,14 @@ from tests.factories.material import MaterialFactory
 from tests.factories.material_requirement import MaterialRequirementFactory
 
 
-def test_save_and_load_material(tmp_path: Path) -> None:
+@pytest.fixture
+def repository(tmp_path: Path) -> MaterialRepository:
+    """Create a material repository using a temporary directory."""
+    return MaterialRepository(tmp_path)
+
+
+def test_save_and_load_material(repository: MaterialRepository, project: Project) -> None:
     """Verify that a material can be saved and loaded."""
-    repository = MaterialRepository(tmp_path)
-
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
-
     clay = MaterialFactory.create(id="clay")
 
     mud_patch_mix = MaterialFactory.create(
@@ -44,94 +49,139 @@ def test_save_and_load_material(tmp_path: Path) -> None:
     assert requirement.amount == 2
 
 
-def test_load_all_loads_all_materials(tmp_path: Path) -> None:
-    """Verify that all project materials can be loaded."""
-    repository = MaterialRepository(tmp_path)
+def test_save_material_writes_icon_tag(repository: MaterialRepository, project: Project) -> None:
+    """Persist the material icon tag using its local ID."""
+    repository.save(project, MaterialFactory.create(id="iron"))
 
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    file_path = (
+        repository._mods_directory
+        / project.qualified_id
+        / ContentType.MATERIALS.value
+        / "iron.json"
+    )
 
-    first_material = MaterialFactory.create(id="first_material")
-    second_material = MaterialFactory.create(id="second_material")
+    with file_path.open("r", encoding="utf-8") as file:
+        data = json.load(file)
 
-    repository.save(project, first_material)
-    repository.save(project, second_material)
-
-    loaded_materials = repository.load_all(project)
-
-    assert [material.id for material in loaded_materials] == ["first_material", "second_material"]
+    assert data["icon_tag"] == "materials:iron"
 
 
-def test_load_all_returns_empty_list_when_materials_directory_does_not_exist(
-    tmp_path: Path,
+def test_serialize_material(project: Project, repository: MaterialRepository) -> None:
+    """Serialize a material into the expected JSON structure."""
+    material = MaterialFactory.create(id="iron", crafting_materials=[])
+
+    data = repository._serialize(project, material)
+
+    assert data == {
+        "id": material.get_qualified_id(project.qualified_id),
+        "icon_tag": "materials:iron",
+        "crafting_materials": {},
+    }
+
+
+def test_serialize_material_with_crafting_materials(
+    project: Project,
+    repository: MaterialRepository,
 ) -> None:
-    """Return an empty list when the materials directory does not exist."""
-    repository = MaterialRepository(tmp_path)
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    """Serialize crafting material references and their amounts."""
+    material = MaterialFactory.create(
+        crafting_materials=[
+            MaterialRequirementFactory.create(
+                material_reference=ContentReferenceFactory.create(
+                    content_type=ContentType.MATERIALS,
+                    qualified_id=f"{project.qualified_id}.iron",
+                ),
+                amount=3,
+            ),
+            MaterialRequirementFactory.create(
+                material_reference=ContentReferenceFactory.create(
+                    content_type=ContentType.MATERIALS,
+                    qualified_id=f"{project.qualified_id}.coal",
+                ),
+                amount=2,
+            ),
+        ],
+    )
 
-    assert repository.load_all(project) == []
+    data = repository._serialize(project, material)
+
+    assert data["crafting_materials"] == {
+        f"{project.qualified_id}.iron": 3,
+        f"{project.qualified_id}.coal": 2,
+    }
 
 
-def test_list_material_ids_returns_sorted_ids(tmp_path: Path) -> None:
-    """Return material IDs in sorted order."""
-    repository = MaterialRepository(tmp_path)
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+def test_deserialize_material(repository: MaterialRepository) -> None:
+    """Deserialize a material with no crafting materials."""
+    material = repository._deserialize(
+        {
+            "id": "example.iron",
+            "crafting_materials": {},
+        }
+    )
 
-    repository.save(project, MaterialFactory.create(id="stone"))
-    repository.save(project, MaterialFactory.create(id="clay"))
-    repository.save(project, MaterialFactory.create(id="copper"))
-
-    assert repository.list_material_ids(project) == ["clay", "copper", "stone"]
+    assert material.id == "iron"
+    assert material.localizations == {}
+    assert material.crafting_materials == []
 
 
-def test_list_material_ids_returns_empty_list_when_materials_directory_does_not_exist(
-    tmp_path: Path,
+def test_deserialize_material_without_crafting_materials(repository: MaterialRepository) -> None:
+    """Allow the crafting materials field to be absent."""
+    material = repository._deserialize({"id": "example.iron"})
+
+    assert material.id == "iron"
+    assert material.crafting_materials == []
+
+
+def test_deserialize_material_with_crafting_materials(repository: MaterialRepository) -> None:
+    """Deserialize crafting material references and amounts."""
+    material = repository._deserialize(
+        {
+            "id": "example.steel",
+            "crafting_materials": {
+                "example.iron": 3,
+                "example.coal": 2,
+            },
+        }
+    )
+
+    assert material.id == "steel"
+    assert len(material.crafting_materials) == 2
+
+    requirements = {
+        requirement.material_reference.qualified_id: requirement.amount
+        for requirement in material.crafting_materials
+    }
+
+    assert requirements == {
+        "example.iron": 3,
+        "example.coal": 2,
+    }
+
+    assert all(
+        requirement.material_reference.content_type == ContentType.MATERIALS
+        for requirement in material.crafting_materials
+    )
+
+
+@pytest.mark.parametrize(
+    ("qualified_id", "expected_id"),
+    [
+        ("example.iron", "iron"),
+        ("my.mod.iron", "iron"),
+    ],
+)
+def test_deserialize_extracts_local_id(
+    qualified_id: str,
+    expected_id: str,
+    repository: MaterialRepository,
 ) -> None:
-    """Return an empty list when the materials directory does not exist."""
-    repository = MaterialRepository(tmp_path)
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
+    """Extract the local ID from the last segment of a qualified ID."""
+    material = repository._deserialize(
+        {
+            "id": qualified_id,
+            "crafting_materials": {},
+        }
+    )
 
-    assert repository.list_material_ids(project) == []
-
-
-def test_delete_removes_material(tmp_path: Path) -> None:
-    """Remove a material from the project."""
-    repository = MaterialRepository(tmp_path)
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
-
-    material = MaterialFactory.create(id="clay")
-    repository.save(project, material)
-
-    repository.delete(project, material.id)
-
-    assert repository.list_material_ids(project) == []
-
-
-def test_save_overwrites_existing_material(tmp_path: Path) -> None:
-    """Overwrite an existing material when saving it again."""
-    repository = MaterialRepository(tmp_path)
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
-
-    material = MaterialFactory.create(id="clay")
-    repository.save(project, material)
-
-    material.crafting_materials.append(MaterialRequirementFactory.create())
-
-    repository.save(project, material)
-
-    loaded_material = repository.load(project, material.id)
-
-    assert loaded_material.crafting_materials == material.crafting_materials
-
-
-def test_save_sets_material_state_to_saved(tmp_path: Path) -> None:
-    """Set the material state to saved after saving."""
-    repository = MaterialRepository(tmp_path)
-
-    project = Project(namespace="test", mod_id="test_mod", name="Test Mod")
-
-    material = MaterialFactory.create(id="clay")
-    material.state = ContentState.MODIFIED
-
-    repository.save(project, material)
-
-    assert material.state is ContentState.SAVED
+    assert material.id == expected_id

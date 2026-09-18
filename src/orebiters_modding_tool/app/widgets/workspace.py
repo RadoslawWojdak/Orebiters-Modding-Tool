@@ -1,14 +1,13 @@
-from typing import Any, cast
+from typing import Any
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabWidget, QVBoxLayout, QWidget
 
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
-from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
+from orebiters_modding_tool.app.models.content_factory import CONTENT_FACTORY_REGISTRY
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
-from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewConfig,
     ContentOverviewWidget,
@@ -20,7 +19,7 @@ from orebiters_modding_tool.domain.content import (
     ContentState,
     ContentType,
 )
-from orebiters_modding_tool.domain.material import Material, MaterialLocalization
+from orebiters_modding_tool.domain.material import Material
 from orebiters_modding_tool.services.project_service import ProjectService
 
 
@@ -161,19 +160,24 @@ class Workspace(QWidget):
 
         :param content_reference: Reference to the content.
         :returns: Configured content table model.
+        :raises RuntimeError: If no project is active.
+        :raises ValueError: If the content type is unsupported.
         """
         active_project = self._project_service.active_project
 
         if active_project is None:
             raise RuntimeError("No active project.")
 
-        match content_reference.content_type:
-            case ContentType.MATERIALS:
-                materials = cast(list[Material], active_project.content[ContentType.MATERIALS])
-                return MaterialTableModel(materials, self)
+        try:
+            model_class = ContentTableModel.get_class(content_reference.content_type)
+        except KeyError:
+            raise ValueError(
+                f"Unsupported content type: {content_reference.content_type}."
+            ) from None
 
-            case _:
-                raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
+        content = active_project.content[content_reference.content_type]
+
+        return model_class(content, self)
 
     # =========================================================================
     # Content CRUD
@@ -185,7 +189,7 @@ class Workspace(QWidget):
         :param content_reference: Reference to the content.
         """
         ContentIdDialog(
-            content_name=content_reference.content_type.display_name,
+            content_type=content_reference.content_type,
             on_create=lambda content_id: self._create_content(content_reference, content_id),
             parent=self,
         ).exec()
@@ -293,21 +297,14 @@ class Workspace(QWidget):
         :param content_reference: Reference to the content.
         :param content_id: Content ID.
         :returns: New content item.
+        :raises ValueError: If the content type is unsupported.
         """
-        match content_reference.content_type:
-            case ContentType.MATERIALS:
-                return Material(
-                    id=content_id,
-                    localizations={
-                        "en": MaterialLocalization(),
-                        "pl": MaterialLocalization(),
-                    },
-                    crafting_materials=[],
-                    state=ContentState.NEW,
-                )
+        factory = CONTENT_FACTORY_REGISTRY.get(content_reference.content_type)
 
-            case _:
-                raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
+        if factory is None:
+            raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
+
+        return factory(content_id)
 
     def _create_content_editor(
         self,
@@ -319,20 +316,23 @@ class Workspace(QWidget):
         :param content_reference: Reference to the content.
         :param item: Content item to edit.
         :returns: Configured content editor.
+        :raises ValueError: If the content type is unsupported.
         """
-        match content_reference.content_type:
-            case ContentType.MATERIALS:
-                if not isinstance(item, Material):
-                    raise TypeError("Expected a Material.")
+        content_type = content_reference.content_type
 
-                editor = MaterialEditorWidget(
-                    item=item,
-                    context=self._create_material_editor_context(),
-                    parent=self,
-                )
+        try:
+            editor_class = BaseEditorWidget.get_class(content_type)
+        except KeyError:
+            raise ValueError(f"Unsupported content type: {content_type}.") from None
 
-            case _:
-                raise ValueError(f"Unsupported content type: {content_reference.content_type}.")
+        if content_type is ContentType.MATERIALS:
+            if not isinstance(item, Material):
+                raise TypeError("Expected a Material.")
+            context = self._create_material_editor_context()
+        else:
+            raise ValueError(f"Unsupported content type: {content_type}.")
+
+        editor = editor_class(item=item, context=context, parent=self)
 
         editor.saved.connect(lambda: self._handle_content_editor_saved(content_reference, item))
 

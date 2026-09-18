@@ -12,12 +12,14 @@ from orebiters_modding_tool.app.editors.material_requirement_editor_widget impor
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
-from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import Material, MaterialRequirement
 
 
 class MaterialEditorWidget(BaseEditorWidget[Material]):
     """Editor for a material."""
+
+    CONTENT_TYPE = ContentType.MATERIALS
 
     def _get_qualified_id(self) -> str:
         """Return the qualified material ID.

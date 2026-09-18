@@ -36,9 +36,8 @@ class ProjectExplorer(QDockWidget):
 
         self._model.clear()
 
-        self._create_category("Items", ContentType.ITEMS)
-        self._create_category("Materials", ContentType.MATERIALS)
-        self._create_category("Resources", ContentType.RESOURCES)
+        for content_type in ContentType:
+            self._create_category(content_type.display_name, content_type)
 
         self._restore_expanded_categories(expanded_categories)
 

@@ -1,14 +1,14 @@
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any, cast
+from dataclasses import asdict, fields
+from typing import Any
 
 from orebiters_modding_tool.domain.content import Content, ContentReference, ContentType
-from orebiters_modding_tool.domain.material import Material, MaterialLocalization
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.domain.project_identifier import normalize_identifier
 from orebiters_modding_tool.domain.project_registry import ProjectRegistry
+from orebiters_modding_tool.infrastructure.content_repository import ContentRepository
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
-from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
 
 
@@ -19,17 +19,17 @@ class ProjectService:
         self,
         project_repository: ProjectRepository,
         localization_repository: LocalizationRepository,
-        material_repository: MaterialRepository,
+        content_repositories: dict[ContentType, ContentRepository[Any]],
     ) -> None:
         """Initialize the project service.
 
         :param project_repository: Repository used for project persistence.
         :param localization_repository: Repository used for localization persistence.
-        :param material_repository: Repository used for material persistence.
+        :param content_repositories: Dictionary of repositories used for content persistence.
         """
         self._project_repository = project_repository
         self._localization_repository = localization_repository
-        self._material_repository = material_repository
+        self._content_repositories = content_repositories
 
         self._project_registry = ProjectRegistry(self._load_all_projects())
         self._active_project: Project | None = None
@@ -126,7 +126,10 @@ class ProjectService:
         project = self._require_active_project()
 
         self._project_repository.save(project)
-        self._save_materials(project)
+
+        for content_type in self._content_repositories:
+            self._save_content(project, content_type)
+
         self._save_localizations(project)
 
         self._mark_project_as_saved()
@@ -177,23 +180,25 @@ class ProjectService:
 
         return self._active_project
 
-    def _save_materials(self, project: Project) -> None:
-        """Synchronize project materials with persistent storage.
+    def _save_content(self, project: Project, content_type: ContentType) -> None:
+        """Synchronize project content with persistent storage.
 
-        :param project: Project whose materials should be saved.
+        :param project: Project whose content should be saved.
+        :param content_type: Type of content to save.
         """
-        materials = cast(list[Material], project.content[ContentType.MATERIALS])
+        repository = self._content_repositories[content_type]
+        contents = project.content[content_type]
 
-        existing_material_ids = set(self._material_repository.list_material_ids(project))
-        current_material_ids = {material.id for material in materials}
+        existing_ids = set(repository.list_ids(project))
+        current_ids = {content.id for content in contents}
 
-        for material in materials:
-            self._material_repository.save(project, material)
+        for content in contents:
+            repository.save(project, content)
 
-        deleted_material_ids = existing_material_ids - current_material_ids
+        deleted_ids = existing_ids - current_ids
 
-        for material_id in deleted_material_ids:
-            self._material_repository.delete(project, material_id)
+        for content_id in deleted_ids:
+            repository.delete(project, content_id)
 
     def _save_localizations(self, project: Project) -> None:
         """Synchronize project localizations with persistent storage.
@@ -202,17 +207,15 @@ class ProjectService:
         """
         localization_data: dict[str, dict[str, str]] = defaultdict(dict)
 
-        for material in project.content[ContentType.MATERIALS]:
-            prefix = f"config.{material.id}"
+        for content_type in self._content_repositories:
+            for content in project.content[content_type]:
+                prefix = f"config.{content_type.value}.{content.id}"
 
-            for language, localization in material.localizations.items():
-                entries = localization_data[language]
+                for language, localization in content.localizations.items():
+                    entries = localization_data[language]
 
-                entries[f"{prefix}.one"] = localization.one
-                entries[f"{prefix}.few"] = localization.few
-                entries[f"{prefix}.many"] = localization.many
-                entries[f"{prefix}.hint"] = localization.hint
-                entries[f"{prefix}.description"] = localization.description
+                    for field_name, value in asdict(localization).items():
+                        entries[f"{prefix}.{field_name}"] = value
 
         existing_languages = set(self._localization_repository.list_languages(project))
         current_languages = set(localization_data)
@@ -239,30 +242,37 @@ class ProjectService:
         """
         project = self._project_repository.load(qualified_id)
 
-        project.content[ContentType.MATERIALS] = cast(
-            list[Content[Any]],
-            self._material_repository.load_all(project),
-        )
+        for content_type, repository in self._content_repositories.items():
+            project.content[content_type] = repository.load_all(project)
 
         localization_data = self._localization_repository.load_all(project)
-        self._load_material_localizations(project, localization_data)
+        self._load_localizations(project, localization_data)
 
         return project
 
-    @staticmethod
-    def _load_material_localizations(
+    def _load_localizations(
+        self,
         project: Project,
         localization_data: dict[str, dict[str, str]],
     ) -> None:
-        """Apply localization data to project materials."""
-        for language, entries in localization_data.items():
-            for material in project.content[ContentType.MATERIALS]:
-                prefix = f"config.{material.id}"
+        """Apply localization data to project content.
 
-                material.localizations[language] = MaterialLocalization(
-                    one=entries[f"{prefix}.one"],
-                    few=entries[f"{prefix}.few"],
-                    many=entries[f"{prefix}.many"],
-                    hint=entries[f"{prefix}.hint"],
-                    description=entries[f"{prefix}.description"],
-                )
+        :param project: Project whose content receives localizations.
+        :param localization_data: Localization entries grouped by language.
+        """
+        for content_type in self._content_repositories:
+            content_class = Content.get_class(content_type)
+            localization_class = content_class.LOCALIZATION_CLASS
+            localization_fields = fields(localization_class)
+
+            for content in project.content[content_type]:
+                prefix = f"config.{content_type.value}.{content.id}"
+
+                for language, entries in localization_data.items():
+                    localization_values = {
+                        field.name: entries[f"{prefix}.{field.name}"]
+                        for field in localization_fields
+                        if f"{prefix}.{field.name}" in entries
+                    }
+
+                    content.localizations[language] = localization_class(**localization_values)

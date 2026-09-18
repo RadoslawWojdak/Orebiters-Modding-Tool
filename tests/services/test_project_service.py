@@ -6,6 +6,7 @@ import pytest
 
 from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.material import Material, MaterialLocalization
+from orebiters_modding_tool.infrastructure.content_repository import ContentRepository
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
@@ -21,11 +22,21 @@ def create_project_service(tmp_path: Path) -> ProjectService:
     :param tmp_path: Temporary storage directory.
     :returns: Configured project service.
     """
+    content_repositories = {
+        content_type: ContentRepository.get_class(content_type)(tmp_path)
+        for content_type in ContentType
+    }
+
     return ProjectService(
         project_repository=ProjectRepository(tmp_path),
         localization_repository=LocalizationRepository(tmp_path),
-        material_repository=MaterialRepository(tmp_path),
+        content_repositories=content_repositories,
     )
+
+
+# =============================================================================
+# Project Lifecycle
+# =============================================================================
 
 
 def test_create_project_normalizes_identifiers_and_activates_project(
@@ -51,6 +62,26 @@ def test_close_project_clears_active_project(project_service: ProjectService) ->
 
     assert project_service.active_project is None
     assert not project_service.has_active_project
+
+
+def test_list_project_qualified_ids_returns_available_projects(tmp_path: Path) -> None:
+    """Return qualified IDs of available projects."""
+    project_service = create_project_service(tmp_path)
+
+    first_project = project_service.create_project(namespace="test", name="First Mod")
+    project_service.close_project()
+
+    second_project = project_service.create_project(namespace="test", name="Second Mod")
+
+    assert project_service.list_project_qualified_ids() == [
+        first_project.qualified_id,
+        second_project.qualified_id,
+    ]
+
+
+# =============================================================================
+# Content
+# =============================================================================
 
 
 def test_get_content_references_returns_references_from_all_projects(
@@ -95,12 +126,11 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
 
     project_service.add_content(ContentType.MATERIALS, clay)
     project_service.add_content(ContentType.MATERIALS, mud_patch_mix)
-
     project_service.save_project()
 
     reopened_project_service = create_project_service(tmp_path)
-
     reopened_project = reopened_project_service.open_project(project.qualified_id)
+
     materials = cast(list[Material], reopened_project.content[ContentType.MATERIALS])
 
     assert [material.id for material in materials] == ["clay", "mud_patch_mix"]
@@ -120,21 +150,6 @@ def test_open_project_loads_saved_materials(tmp_path: Path) -> None:
     assert requirement.amount == 2
 
 
-def test_list_project_qualified_ids_returns_available_projects(tmp_path: Path) -> None:
-    """Return qualified IDs of available projects."""
-    project_service = create_project_service(tmp_path)
-
-    first_project = project_service.create_project(namespace="test", name="First Mod")
-    project_service.close_project()
-
-    second_project = project_service.create_project(namespace="test", name="Second Mod")
-
-    assert project_service.list_project_qualified_ids() == [
-        first_project.qualified_id,
-        second_project.qualified_id,
-    ]
-
-
 def test_add_content_raises_for_duplicate_content(project_service: ProjectService) -> None:
     """Raise an error when adding content with an existing ID."""
     project_service.create_project(namespace="test", name="Test Mod")
@@ -148,10 +163,31 @@ def test_add_content_raises_for_duplicate_content(project_service: ProjectServic
         project_service.add_content(ContentType.MATERIALS, second_material)
 
 
-def test_save_project_raises_without_active_project(project_service: ProjectService) -> None:
-    """Raise an error when saving without an active project."""
-    with pytest.raises(RuntimeError, match="No project is currently active."):
-        project_service.save_project()
+def test_add_content_marks_project_as_modified(project_service: ProjectService) -> None:
+    """Mark the project as modified when content is added."""
+    project = project_service.create_project(namespace="test", name="Test Mod")
+    material = MaterialFactory.create(id="clay")
+
+    assert not project.has_unsaved_changes
+
+    project_service.add_content(ContentType.MATERIALS, material)
+
+    assert project.has_unsaved_changes
+
+
+def test_remove_content_marks_project_as_modified(project_service: ProjectService) -> None:
+    """Mark the project as modified when content is removed."""
+    project = project_service.create_project(namespace="test", name="Test Mod")
+    material = MaterialFactory.create(id="clay")
+
+    project_service.add_content(ContentType.MATERIALS, material)
+    project_service.save_project()
+
+    assert not project.has_unsaved_changes
+
+    project_service.remove_content(ContentType.MATERIALS, material)
+
+    assert project.has_unsaved_changes
 
 
 def test_save_project_deletes_removed_materials(tmp_path: Path) -> None:
@@ -170,7 +206,12 @@ def test_save_project_deletes_removed_materials(tmp_path: Path) -> None:
     project_service.remove_content(ContentType.MATERIALS, stone)
     project_service.save_project()
 
-    assert MaterialRepository(tmp_path).list_material_ids(project) == ["clay"]
+    assert MaterialRepository(tmp_path).list_ids(project) == ["clay"]
+
+
+# =============================================================================
+# Localizations
+# =============================================================================
 
 
 def test_save_project_deletes_removed_localization_languages(tmp_path: Path) -> None:
@@ -260,33 +301,6 @@ def test_mark_project_as_modified_raises_without_active_project(
         project_service.mark_project_as_modified()
 
 
-def test_add_content_marks_project_as_modified(project_service: ProjectService) -> None:
-    """Mark the project as modified when content is added."""
-    project = project_service.create_project(namespace="test", name="Test Mod")
-    material = MaterialFactory.create(id="clay")
-
-    assert not project.has_unsaved_changes
-
-    project_service.add_content(ContentType.MATERIALS, material)
-
-    assert project.has_unsaved_changes
-
-
-def test_remove_content_marks_project_as_modified(project_service: ProjectService) -> None:
-    """Mark the project as modified when content is removed."""
-    project = project_service.create_project(namespace="test", name="Test Mod")
-    material = MaterialFactory.create(id="clay")
-
-    project_service.add_content(ContentType.MATERIALS, material)
-    project_service.save_project()
-
-    assert not project.has_unsaved_changes
-
-    project_service.remove_content(ContentType.MATERIALS, material)
-
-    assert project.has_unsaved_changes
-
-
 def test_save_project_marks_project_as_saved(project_service: ProjectService) -> None:
     """Mark the project as saved after successfully saving it."""
     project = project_service.create_project(namespace="test", name="Test Mod")
@@ -299,6 +313,12 @@ def test_save_project_marks_project_as_saved(project_service: ProjectService) ->
     project_service.save_project()
 
     assert not project.has_unsaved_changes
+
+
+def test_save_project_raises_without_active_project(project_service: ProjectService) -> None:
+    """Raise an error when saving without an active project."""
+    with pytest.raises(RuntimeError, match="No project is currently active."):
+        project_service.save_project()
 
 
 # =============================================================================

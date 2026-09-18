@@ -8,6 +8,7 @@ from PySide6.QtWidgets import QMessageBox, QScrollArea
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
+from orebiters_modding_tool.app.models.content_factory import CONTENT_FACTORY_REGISTRY
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewWidget
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
@@ -482,11 +483,14 @@ def test_create_content_item_creates_material(
 
 
 def test_create_content_item_raises_for_unsupported_content_type() -> None:
-    """Raise an error when creating an unsupported content type."""
-    reference = ContentReference(content_type=ContentType.ITEMS)
+    """Raise an error when the content type has no registered factory."""
+    reference = ContentReference(content_type=ContentType.MATERIALS)
 
-    with pytest.raises(ValueError, match="Unsupported content type"):
-        Workspace._create_content_item(reference, "sword")
+    with (
+        patch.dict(CONTENT_FACTORY_REGISTRY, {}, clear=True),
+        pytest.raises(ValueError, match="Unsupported content type"),
+    ):
+        Workspace._create_content_item(reference, "iron_ore")
 
 
 def test_create_content_editor_creates_material_editor(
@@ -511,14 +515,15 @@ def test_create_content_editor_raises_for_invalid_material(
         workspace._create_content_editor(materials_category_reference, object())  # type: ignore[arg-type]
 
 
-def test_create_content_editor_raises_for_unsupported_content_type(
-    workspace: Workspace,
-) -> None:
-    """Raise an error when creating an editor for an unsupported content type."""
-    reference = ContentReference(content_type=ContentType.ITEMS)
+def test_create_content_editor_raises_for_unsupported_content_type(workspace: Workspace) -> None:
+    """Raise an error when the content type has no registered editor."""
+    reference = ContentReference(content_type=ContentType.MATERIALS)
 
-    with pytest.raises(ValueError, match="Unsupported content type"):
-        workspace._create_content_editor(reference, object())  # type: ignore[arg-type]
+    with (
+        patch.dict(BaseEditorWidget._registry, {}, clear=True),
+        pytest.raises(ValueError, match="Unsupported content type"),
+    ):
+        workspace._create_content_editor(reference, MaterialFactory.create())
 
 
 def test_saving_content_emits_updated_change_and_marks_project_modified(

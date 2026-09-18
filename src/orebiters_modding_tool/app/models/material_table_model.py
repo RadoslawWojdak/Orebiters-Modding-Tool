@@ -1,10 +1,13 @@
 from orebiters_modding_tool.app.models.column import Column
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
+from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.material import Material
 
 
 class MaterialTableModel(ContentTableModel[Material]):
     """Table model for materials."""
+
+    CONTENT_TYPE = ContentType.MATERIALS
 
     COLUMNS = (
         Column[Material](

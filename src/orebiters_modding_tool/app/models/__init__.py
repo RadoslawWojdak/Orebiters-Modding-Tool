@@ -1,0 +1,1 @@
+from .material_table_model import MaterialTableModel as MaterialTableModel

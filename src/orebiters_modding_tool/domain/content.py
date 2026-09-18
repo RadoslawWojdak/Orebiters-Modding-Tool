@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import ClassVar
+from typing import Any, ClassVar, get_args, get_origin
 
 
 class ContentType(Enum):
@@ -8,9 +8,9 @@ class ContentType(Enum):
 
     _value_: str
 
-    ITEMS = ("items", "Items", "Item")
+    # ITEMS = ("items", "Items", "Item")
     MATERIALS = ("materials", "Materials", "Material")
-    RESOURCES = ("resources", "Resources", "Resource")
+    # RESOURCES = ("resources", "Resources", "Resource")
 
     def __init__(self, value: str, display_name: str, singular_display_name: str) -> None:
         self._value_ = value
@@ -87,16 +87,36 @@ class ContentReference:
         return self.qualified_id.split(".")[2]
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(kw_only=True)
 class Content[TLocalization: ContentLocalization]:
     """Editable content definition."""
 
     CONTENT_TYPE: ClassVar[ContentType]
+    LOCALIZATION_CLASS: ClassVar[type[ContentLocalization]]
+
+    _registry: ClassVar[dict[ContentType, type[Content[Any]]]] = {}
 
     id: str
     localizations: dict[str, TLocalization]
 
     state: ContentState = ContentState.SAVED
+
+    def __init_subclass__(cls, **kwargs: Any) -> None:
+        """Initialize concrete content subclasses."""
+        super().__init_subclass__(**kwargs)
+
+        cls._resolve_localization_class()
+        cls._register()
+
+    @classmethod
+    def get_class(cls, content_type: ContentType) -> type[Content[Any]]:
+        """Return the content class registered for the given type.
+
+        :param content_type: Type of content to retrieve.
+        :returns: Registered content class.
+        :raises KeyError: If no class is registered for the given type.
+        """
+        return cls._registry[content_type]
 
     def get_qualified_id(self, mod_qualified_id: str) -> str:
         """Build a fully qualified content ID.
@@ -105,3 +125,43 @@ class Content[TLocalization: ContentLocalization]:
         :returns: Fully qualified content ID.
         """
         return f"{mod_qualified_id}.{self.id}"
+
+    @classmethod
+    def _resolve_localization_class(cls) -> None:
+        """Resolve the localization class from generic bases."""
+        for base in getattr(cls, "__orig_bases__", ()):
+            if get_origin(base) is not Content:
+                continue
+
+            localization_class = get_args(base)[0]
+
+            if not isinstance(localization_class, type):
+                raise TypeError(f"Could not resolve localization class for '{cls.__name__}'.")
+
+            if not issubclass(localization_class, ContentLocalization):
+                raise TypeError(
+                    f"'{localization_class.__name__}' must inherit from ContentLocalization."
+                )
+
+            cls.LOCALIZATION_CLASS = localization_class
+            return
+
+        for base in cls.__bases__:
+            localization_class = getattr(base, "LOCALIZATION_CLASS", None)
+
+            if localization_class is not None:
+                cls.LOCALIZATION_CLASS = localization_class
+                return
+
+    @classmethod
+    def _register(cls) -> None:
+        """Register the content class."""
+        content_type = cls.__dict__.get("CONTENT_TYPE")
+
+        if content_type is None:
+            return
+
+        if content_type in Content._registry:
+            raise ValueError(f"Content type '{content_type}' is already registered.")
+
+        Content._registry[content_type] = cls
