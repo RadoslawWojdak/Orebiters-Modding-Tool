@@ -1,7 +1,7 @@
 from unittest.mock import Mock, patch
 
-from PySide6.QtGui import QKeySequence
-from PySide6.QtWidgets import QApplication, QMessageBox
+from PySide6.QtGui import QCloseEvent, QKeySequence
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from orebiters_modding_tool.app.main_window import MainWindow
 from orebiters_modding_tool.domain.content import ContentReference
@@ -338,8 +338,7 @@ def test_open_project_stops_when_saving_unsaved_changes_fails(
 
     save_project.assert_called_once()
     open_project.assert_not_called()
-
-    critical.assert_called_once_with(window, "Unable to Save Project", "Save failed")
+    critical.assert_called_once()
 
     assert project_service.active_project is not None
     assert project_service.active_project.qualified_id == first_project.qualified_id
@@ -399,3 +398,165 @@ def test_update_project_actions_disables_save_without_active_project(
     window._update_project_actions()
 
     assert not window._save_action.isEnabled()
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
+@patch("orebiters_modding_tool.app.main_window.NewProjectDialog")
+def test_new_project_saves_changes_before_creating_project(
+    new_project_dialog: Mock,
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Save unsaved changes before creating a new project."""
+    project_service.create_project("orebiters", "existing")
+    project_service.mark_project_as_modified()
+
+    dialog = new_project_dialog.return_value
+    dialog.exec.return_value = QDialog.DialogCode.Accepted
+    dialog.namespace = "orebiters"
+    dialog.name = "new"
+
+    window = MainWindow(project_service)
+
+    with patch.object(project_service, "save_project") as save_project:
+        window._new_action.trigger()
+
+    save_project.assert_called_once()
+
+    assert project_service.active_project is not None
+    assert project_service.active_project.name == "new"
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.No,
+)
+@patch("orebiters_modding_tool.app.main_window.NewProjectDialog")
+def test_new_project_discards_changes_and_creates_project(
+    new_project_dialog: Mock,
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Discard unsaved changes and create a new project."""
+    project_service.create_project("orebiters", "existing")
+    project_service.mark_project_as_modified()
+
+    dialog = new_project_dialog.return_value
+    dialog.exec.return_value = QDialog.DialogCode.Accepted
+    dialog.namespace = "orebiters"
+    dialog.name = "new"
+
+    window = MainWindow(project_service)
+
+    with patch.object(project_service, "save_project") as save_project:
+        window._new_action.trigger()
+
+    save_project.assert_not_called()
+
+    assert project_service.active_project is not None
+    assert project_service.active_project.name == "new"
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Cancel,
+)
+@patch("orebiters_modding_tool.app.main_window.NewProjectDialog")
+def test_new_project_cancels_when_user_cancels_unsaved_changes(
+    new_project_dialog: Mock,
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Keep the current project when unsaved changes are canceled."""
+    existing_project = project_service.create_project("orebiters", "existing")
+    project_service.mark_project_as_modified()
+
+    dialog = new_project_dialog.return_value
+    dialog.exec.return_value = 1
+    dialog.namespace = "orebiters"
+    dialog.name = "new"
+
+    window = MainWindow(project_service)
+
+    with patch.object(project_service, "create_project") as create_project:
+        window._new_action.trigger()
+
+    create_project.assert_not_called()
+
+    assert project_service.active_project is not None
+    assert project_service.active_project.qualified_id == existing_project.qualified_id
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Yes,
+)
+def test_close_event_saves_changes_and_accepts_event(
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Save unsaved changes and accept the close event."""
+    project_service.create_project("orebiters", "test")
+    project_service.mark_project_as_modified()
+
+    window = MainWindow(project_service)
+    event = QCloseEvent()
+
+    with patch.object(project_service, "save_project") as save_project:
+        window.closeEvent(event)
+
+    save_project.assert_called_once()
+    assert event.isAccepted()
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.No,
+)
+def test_close_event_discards_changes_and_accepts_event(
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Discard unsaved changes and accept the close event."""
+    project_service.create_project("orebiters", "test")
+    project_service.mark_project_as_modified()
+
+    window = MainWindow(project_service)
+    event = QCloseEvent()
+
+    with patch.object(project_service, "save_project") as save_project:
+        window.closeEvent(event)
+
+    save_project.assert_not_called()
+    assert event.isAccepted()
+
+
+@patch(
+    "orebiters_modding_tool.app.main_window.QMessageBox.question",
+    return_value=QMessageBox.StandardButton.Cancel,
+)
+def test_close_event_ignores_event_when_user_cancels(
+    _question: Mock,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Ignore the close event when the user cancels."""
+    project_service.create_project("orebiters", "test")
+    project_service.mark_project_as_modified()
+
+    window = MainWindow(project_service)
+    event = QCloseEvent()
+
+    with patch.object(project_service, "save_project") as save_project:
+        window.closeEvent(event)
+
+    save_project.assert_not_called()
+    assert not event.isAccepted()

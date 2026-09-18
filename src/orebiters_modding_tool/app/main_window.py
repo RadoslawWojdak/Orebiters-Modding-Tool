@@ -2,10 +2,11 @@ import json
 from collections.abc import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QIcon, QKeySequence
+from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import QDialog, QInputDialog, QMainWindow, QMessageBox, QStyle, QToolBar
 
 from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDialog
+from orebiters_modding_tool.app.dialogs.project_exit_guard import ProjectExitGuard
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference
@@ -27,6 +28,7 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self._project_service = project_service
+        self._project_exit_guard = ProjectExitGuard(self._project_service, self)
 
         self.setWindowTitle("Orebiters Modding Tool")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
@@ -38,6 +40,16 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
 
         self._update_project_actions()
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Handle the main window close request.
+
+        :param event: Window close event.
+        """
+        if self._project_exit_guard.confirm_unsaved_project_exit():
+            event.accept()
+        else:
+            event.ignore()
 
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
@@ -211,6 +223,9 @@ class MainWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
 
+        if not self._project_exit_guard.confirm_unsaved_project_exit():
+            return
+
         try:
             project = self._project_service.create_project(dialog.namespace, dialog.name)
         except FileExistsError:
@@ -242,7 +257,7 @@ class MainWindow(QMainWindow):
         if not accepted:
             return
 
-        if not self._confirm_unsaved_project_changes():
+        if not self._project_exit_guard.confirm_unsaved_project_exit():
             return
 
         try:
@@ -259,41 +274,6 @@ class MainWindow(QMainWindow):
             return
 
         self._set_active_project(project)
-
-    def _confirm_unsaved_project_changes(self) -> bool:
-        """Confirm opening another project when the current project has unsaved changes.
-
-        :returns: True if opening the project should continue.
-        """
-        project = self._project_service.active_project
-
-        if project is None or not project.has_unsaved_changes:
-            return True
-
-        answer = QMessageBox.question(
-            self,
-            "Unsaved Changes",
-            f"Project '{project.name}' has unsaved changes.\n"
-            f"Do you want to save them before opening another project?",
-            QMessageBox.StandardButton.Yes
-            | QMessageBox.StandardButton.No
-            | QMessageBox.StandardButton.Cancel,
-            QMessageBox.StandardButton.Cancel,
-        )
-
-        if answer == QMessageBox.StandardButton.Cancel:
-            return False
-
-        if answer == QMessageBox.StandardButton.No:
-            return True
-
-        try:
-            self._project_service.save_project()
-        except OSError as error:
-            QMessageBox.critical(self, "Unable to Save Project", str(error))
-            return False
-
-        return True
 
     def _save_project(self) -> None:
         """Save the current project."""
