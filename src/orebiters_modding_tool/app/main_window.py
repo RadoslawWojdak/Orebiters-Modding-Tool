@@ -3,13 +3,23 @@ from collections.abc import Callable
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
-from PySide6.QtWidgets import QDialog, QInputDialog, QMainWindow, QMessageBox, QStyle, QToolBar
+from PySide6.QtWidgets import (
+    QDialog,
+    QInputDialog,
+    QLabel,
+    QMainWindow,
+    QMessageBox,
+    QStatusBar,
+    QStyle,
+    QToolBar,
+)
 
 from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDialog
 from orebiters_modding_tool.app.dialogs.project_exit_guard import ProjectExitGuard
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
+from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.widgets.workspace import Workspace
-from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.services.project_service import ProjectService
 
@@ -38,6 +48,7 @@ class MainWindow(QMainWindow):
         self._setup_workspace()
         self._setup_menu_bar()
         self._setup_toolbar()
+        self._setup_status_bar()
 
         self._update_project_actions()
 
@@ -54,7 +65,7 @@ class MainWindow(QMainWindow):
     def _setup_workspace(self) -> None:
         """Set up the central application workspace."""
         self._workspace = Workspace(self._project_service, self)
-        self._workspace.content_changed.connect(self._project_explorer.refresh)
+        self._workspace.content_changed.connect(self._on_workspace_content_changed)
 
         self.setCentralWidget(self._workspace)
 
@@ -174,6 +185,21 @@ class MainWindow(QMainWindow):
         help_menu.addSeparator()
         help_menu.addAction(self._show_about_dialog_action)
 
+    def _setup_status_bar(self) -> None:
+        """Set up the application status bar."""
+        self._status_bar = QStatusBar(self)
+        self.setStatusBar(self._status_bar)
+
+        self._project_status_label = QLabel(self)
+        self._project_statistics_label = QLabel(self)
+
+        self._project_status_label.setContentsMargins(6, 0, 6, 0)
+
+        self._status_bar.addWidget(self._project_status_label)
+        self._status_bar.addPermanentWidget(self._project_statistics_label)
+
+        self._refresh_status_bar()
+
     def _setup_toolbar(self) -> None:
         """Set up the application toolbar."""
         toolbar = QToolBar("Main Toolbar", self)
@@ -190,6 +216,12 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
 
         self._project_explorer.content_open_requested.connect(self._open_content)
+
+    def _on_workspace_content_changed(self, change: ContentChange) -> None:
+        """Handle content changes reported by the workspace."""
+        self._project_explorer.refresh()
+        self._refresh_status_bar()
+        self._show_status_message(self._format_content_change(change))
 
     def _create_action(
         self,
@@ -238,6 +270,9 @@ class MainWindow(QMainWindow):
 
         self._set_active_project(project)
 
+        self._refresh_status_bar()
+        self._show_status_message("Project created successfully")
+
     def _open_project(self) -> None:
         """Open an existing project."""
         project_ids = self._project_service.list_project_qualified_ids()
@@ -275,6 +310,9 @@ class MainWindow(QMainWindow):
 
         self._set_active_project(project)
 
+        self._refresh_status_bar()
+        self._show_status_message("Project opened successfully")
+
     def _save_project(self) -> None:
         """Save the current project."""
         try:
@@ -284,6 +322,9 @@ class MainWindow(QMainWindow):
             return
 
         self._workspace.refresh_current_content_state()
+
+        self._refresh_status_bar()
+        self._show_status_message("Project saved successfully")
 
     def _refresh_projects(self) -> None:
         """Refresh projects from persistent storage."""
@@ -301,6 +342,18 @@ class MainWindow(QMainWindow):
             return
 
         self._project_explorer.refresh()
+
+        self._refresh_status_bar()
+        self._show_status_message("Projects refreshed successfully")
+
+    def _show_status_message(self, message: str) -> None:
+        """Show a temporary status message."""
+        self._status_bar.showMessage(message, 3000)
+
+    def _refresh_status_bar(self) -> None:
+        """Refresh the status bar."""
+        self._update_project_status()
+        self._update_project_statistics()
 
     def _exit_application(self) -> None:
         """Close the application."""
@@ -368,3 +421,48 @@ class MainWindow(QMainWindow):
         has_active_project = self._project_service.has_active_project
 
         self._save_action.setEnabled(has_active_project)
+
+    def _update_project_status(self) -> None:
+        """Update the active project save status."""
+        if not self._project_service.has_active_project:
+            self._project_status_label.setText("No project open")
+            return
+
+        if self._project_service.has_unsaved_changes:
+            self._project_status_label.setText("Unsaved project changes")
+            return
+
+        self._project_status_label.setText("All changes saved")
+
+    def _update_project_statistics(self) -> None:
+        """Update the active project content statistics."""
+        project = self._project_service.active_project
+
+        if project is None:
+            self._project_statistics_label.clear()
+            return
+
+        statistics = [
+            f"{content_type.display_name}: {len(project.content[content_type])}"
+            for content_type in ContentType
+        ]
+
+        self._project_statistics_label.setText(" | ".join(statistics))
+
+    def _format_content_change(self, change: ContentChange) -> str:
+        """Format a content change for the status bar."""
+        if change.change_type is ContentChangeType.CREATED:
+            return f"Created {change.content_name}"
+
+        if change.change_type is ContentChangeType.UPDATED:
+            return f"Updated {change.content_name}"
+
+        if change.change_type is ContentChangeType.REMOVED:
+            content_type_name = (
+                change.content_type.singular_display_name
+                if change.count == 1
+                else change.content_type.display_name
+            )
+            return f"Removed {change.count} {content_type_name.lower()}"
+
+        return "Content changed"

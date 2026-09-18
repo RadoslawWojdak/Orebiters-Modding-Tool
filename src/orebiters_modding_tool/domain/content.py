@@ -6,9 +6,16 @@ from typing import ClassVar
 class ContentType(Enum):
     """Types of content available in a mod project."""
 
-    ITEMS = "items"
-    MATERIALS = "materials"
-    RESOURCES = "resources"
+    _value_: str
+
+    ITEMS = ("items", "Items", "Item")
+    MATERIALS = ("materials", "Materials", "Material")
+    RESOURCES = ("resources", "Resources", "Resource")
+
+    def __init__(self, value: str, display_name: str, singular_display_name: str) -> None:
+        self._value_ = value
+        self.display_name = display_name
+        self.singular_display_name = singular_display_name
 
 
 class ContentState(Enum):

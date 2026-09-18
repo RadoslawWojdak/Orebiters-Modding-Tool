@@ -3,8 +3,9 @@ from unittest.mock import Mock, patch
 from PySide6.QtGui import QCloseEvent, QKeySequence
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
+from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.main_window import MainWindow
-from orebiters_modding_tool.domain.content import ContentReference
+from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.services.project_service import ProjectService
 
 
@@ -97,8 +98,9 @@ def test_save_project_saves_active_project(
     project_service: ProjectService,
     qapp: QApplication,
 ) -> None:
-    """Save the active project and refresh the current content state."""
+    """Save the active project, refresh and show the current states."""
     project_service.create_project("orebiters", "test")
+    project_service.mark_project_as_modified()
     window = MainWindow(project_service)
 
     with (
@@ -109,14 +111,16 @@ def test_save_project_saves_active_project(
 
     save_project.assert_called_once()
     refresh_state.assert_called_once()
+    assert window.statusBar().currentMessage() == "Project saved successfully"
 
 
-def test_save_project_does_not_refresh_content_state_on_failure(
+def test_save_project_does_not_report_success_when_saving_fails(
     project_service: ProjectService,
     qapp: QApplication,
 ) -> None:
-    """Do not refresh the content state when saving the project fails."""
+    """Keep the project marked as unsaved when saving fails."""
     project_service.create_project("orebiters", "test")
+    project_service.mark_project_as_modified()
     window = MainWindow(project_service)
 
     with (
@@ -128,23 +132,8 @@ def test_save_project_does_not_refresh_content_state_on_failure(
 
     critical.assert_called_once_with(window, "Unable to Save Project", "Save failed")
     refresh_state.assert_not_called()
-
-
-def test_save_project_shows_error_on_failure(
-    project_service: ProjectService,
-    qapp: QApplication,
-) -> None:
-    """Show an error when saving the project fails."""
-    project_service.create_project("orebiters", "test")
-    window = MainWindow(project_service)
-
-    with (
-        patch.object(project_service, "save_project", side_effect=OSError("Save failed")),
-        patch("orebiters_modding_tool.app.main_window.QMessageBox.critical") as critical,
-    ):
-        window._save_project()
-
-    critical.assert_called_once_with(window, "Unable to Save Project", "Save failed")
+    assert window.statusBar().currentMessage() == ""
+    assert window._project_status_label.text() == "Unsaved project changes"
 
 
 def test_open_project_shows_message_when_no_projects_exist(
@@ -203,7 +192,8 @@ def test_open_project_opens_selected_project_without_unsaved_changes(
 
     assert project_service.active_project is not None
     assert project_service.active_project.qualified_id == second_project.qualified_id
-    assert window.windowTitle() == (f"{second_project.name} - Orebiters Modding Tool")
+    assert window.windowTitle() == f"{second_project.name} - Orebiters Modding Tool"
+    assert window._project_status_label.text() == "All changes saved"
     close_tabs.assert_called_once()
 
 
@@ -237,10 +227,11 @@ def test_open_project_saves_unsaved_changes_before_opening_selected_project(
 
     question.assert_called_once()
     save_project.assert_called_once()
+    close_tabs.assert_called_once()
 
     assert project_service.active_project is not None
     assert project_service.active_project.qualified_id == second_project.qualified_id
-    close_tabs.assert_called_once()
+    assert window._project_status_label.text() == "All changes saved"
 
 
 @patch(
@@ -342,6 +333,7 @@ def test_open_project_stops_when_saving_unsaved_changes_fails(
 
     assert project_service.active_project is not None
     assert project_service.active_project.qualified_id == first_project.qualified_id
+    assert window._project_status_label.text() == "Unsaved project changes"
 
 
 @patch("orebiters_modding_tool.app.main_window.QInputDialog.getItem")
@@ -429,6 +421,7 @@ def test_new_project_saves_changes_before_creating_project(
 
     assert project_service.active_project is not None
     assert project_service.active_project.name == "new"
+    assert window._project_status_label.text() == "All changes saved"
 
 
 @patch(
@@ -478,7 +471,7 @@ def test_new_project_cancels_when_user_cancels_unsaved_changes(
     project_service.mark_project_as_modified()
 
     dialog = new_project_dialog.return_value
-    dialog.exec.return_value = 1
+    dialog.exec.return_value = QDialog.DialogCode.Accepted
     dialog.namespace = "orebiters"
     dialog.name = "new"
 
@@ -560,3 +553,215 @@ def test_close_event_ignores_event_when_user_cancels(
 
     save_project.assert_not_called()
     assert not event.isAccepted()
+
+
+# =============================================================================
+# Status Bar
+# =============================================================================
+
+
+def test_initializes_status_bar(project_service: ProjectService, qapp: QApplication) -> None:
+    """Initialize the status bar with project status and statistics."""
+    window = MainWindow(project_service)
+
+    assert window.statusBar() is window._status_bar
+    assert window._project_status_label.text() == "No project open"
+    assert window._project_statistics_label.text() == ""
+
+
+def test_project_status_reflects_save_state(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Show the current saved state of the active project."""
+    project_service.create_project("orebiters", "test")
+    window = MainWindow(project_service)
+
+    assert window._project_status_label.text() == "All changes saved"
+
+    project_service.mark_project_as_modified()
+    window._refresh_status_bar()
+
+    assert window._project_status_label.text() == "Unsaved project changes"
+
+    window._save_project()
+
+    assert window._project_status_label.text() == "All changes saved"
+
+
+def test_project_statistics_reflect_active_project_content(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Display content counts for the active project."""
+    project = project_service.create_project("orebiters", "test")
+    window = MainWindow(project_service)
+
+    expected_statistics = " | ".join(
+        f"{content_type.display_name}: {len(project.content[content_type])}"
+        for content_type in ContentType
+    )
+
+    assert window._project_statistics_label.text() == expected_statistics
+
+
+def test_status_message_is_displayed(project_service: ProjectService, qapp: QApplication) -> None:
+    """Display a temporary message in the status bar."""
+    window = MainWindow(project_service)
+
+    window._show_status_message("Test message")
+
+    assert window.statusBar().currentMessage() == "Test message"
+
+
+def test_formats_created_content_change(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Format a created content change for the status bar."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=ContentChangeType.CREATED,
+        content_type=ContentType.MATERIALS,
+        content_name="orebiters.test.materials.iron_ore",
+    )
+
+    assert window._format_content_change(change) == "Created orebiters.test.materials.iron_ore"
+
+
+def test_formats_updated_content_change(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Format an updated content change for the status bar."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=ContentChangeType.UPDATED,
+        content_type=ContentType.MATERIALS,
+        content_name="orebiters.test.materials.iron_ore",
+    )
+
+    assert window._format_content_change(change) == "Updated orebiters.test.materials.iron_ore"
+
+
+def test_formats_removed_single_content_change(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Use the singular content name when one item is removed."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=ContentChangeType.REMOVED,
+        content_type=ContentType.MATERIALS,
+        count=1,
+    )
+
+    expected = f"Removed 1 {ContentType.MATERIALS.singular_display_name.lower()}"
+
+    assert window._format_content_change(change) == expected
+
+
+def test_formats_removed_multiple_content_change(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Use the plural content name when multiple items are removed."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=ContentChangeType.REMOVED,
+        content_type=ContentType.MATERIALS,
+        count=2,
+    )
+
+    expected = f"Removed 2 {ContentType.MATERIALS.display_name.lower()}"
+
+    assert window._format_content_change(change) == expected
+
+
+def test_formats_unknown_content_change(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Use a fallback message for an unsupported content change type."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=Mock(),
+        content_type=ContentType.MATERIALS,
+    )
+
+    assert window._format_content_change(change) == "Content changed"
+
+
+def test_workspace_content_changed_updates_visible_ui(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Reflect a content change in the status bar."""
+    window = MainWindow(project_service)
+    change = ContentChange(
+        change_type=ContentChangeType.CREATED,
+        content_type=ContentType.MATERIALS,
+        content_name="orebiters.test.materials.iron_ore",
+    )
+
+    window._on_workspace_content_changed(change)
+
+    assert window.statusBar().currentMessage() == "Created orebiters.test.materials.iron_ore"
+
+
+def test_save_project_displays_success_message(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Display a success message after saving the project."""
+    project_service.create_project("orebiters", "test")
+    window = MainWindow(project_service)
+
+    window._save_project()
+
+    assert window.statusBar().currentMessage() == "Project saved successfully"
+
+
+def test_new_project_displays_success_message(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Display a success message after creating a project."""
+    with patch("orebiters_modding_tool.app.main_window.NewProjectDialog") as new_project_dialog:
+        dialog = new_project_dialog.return_value
+        dialog.exec.return_value = QDialog.DialogCode.Accepted
+        dialog.namespace = "orebiters"
+        dialog.name = "test"
+
+        window = MainWindow(project_service)
+        window._new_project()
+
+    assert window.statusBar().currentMessage() == "Project created successfully"
+
+
+def test_refresh_projects_displays_success_message(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Display a success message after refreshing projects."""
+    window = MainWindow(project_service)
+
+    window._refresh_projects()
+
+    assert window.statusBar().currentMessage() == "Projects refreshed successfully"
+
+
+def test_refresh_projects_does_not_display_success_message_on_failure(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Do not display a success message when refreshing projects fails."""
+    window = MainWindow(project_service)
+
+    with (
+        patch.object(project_service, "refresh_projects", side_effect=OSError("Refresh failed")),
+        patch("orebiters_modding_tool.app.main_window.QMessageBox.critical"),
+    ):
+        window._refresh_projects()
+
+    assert window.statusBar().currentMessage() == ""
