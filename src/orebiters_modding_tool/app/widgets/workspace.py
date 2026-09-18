@@ -6,6 +6,7 @@ from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabWidget, QVBoxLayout,
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
+from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import (
@@ -26,7 +27,7 @@ from orebiters_modding_tool.services.project_service import ProjectService
 class Workspace(QWidget):
     """Central workspace of the application."""
 
-    content_changed = Signal(ContentReference)
+    content_changed = Signal(ContentChange)
 
     def __init__(self, project_service: ProjectService, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -184,7 +185,7 @@ class Workspace(QWidget):
         :param content_reference: Reference to the content.
         """
         ContentIdDialog(
-            content_name=content_reference.content_type.value.replace("_", " ").title(),
+            content_name=content_reference.content_type.display_name,
             on_create=lambda content_id: self._create_content(content_reference, content_id),
             parent=self,
         ).exec()
@@ -203,8 +204,16 @@ class Workspace(QWidget):
         content_widget = self._get_content_widget(content_reference)
         content_widget.model.add_item(item)
 
+        project = self._project_service.active_project
+        if project is None:
+            raise RuntimeError("No active project.")
+
         self.content_changed.emit(
-            self._create_content_reference(content_reference.content_type, item)
+            ContentChange(
+                change_type=ContentChangeType.CREATED,
+                content_type=content_reference.content_type,
+                content_name=item.get_qualified_id(project.qualified_id),
+            ),
         )
 
         editor = self._create_content_editor(content_reference, item)
@@ -254,6 +263,7 @@ class Workspace(QWidget):
         content_widget = self._get_content_widget(content_reference)
         model = content_widget.model
 
+        removed_count = 0
         for item in items:
             row = self._find_item_row(model, item)
 
@@ -261,8 +271,16 @@ class Workspace(QWidget):
                 self._close_editor_tab(item)
                 self._project_service.remove_content(content_reference.content_type, item)
                 model.remove_item(row)
+                removed_count += 1
 
-        self.content_changed.emit(content_reference)
+        if removed_count:
+            self.content_changed.emit(
+                ContentChange(
+                    change_type=ContentChangeType.REMOVED,
+                    content_type=content_reference.content_type,
+                    count=removed_count,
+                ),
+            )
 
     # =========================================================================
     # Editors
@@ -366,34 +384,21 @@ class Workspace(QWidget):
 
         self._project_service.mark_project_as_modified()
 
+        project = self._project_service.active_project
+        if project is None:
+            raise RuntimeError("No active project.")
+
         self.content_changed.emit(
-            self._create_content_reference(content_reference.content_type, item)
+            ContentChange(
+                change_type=ContentChangeType.UPDATED,
+                content_type=content_reference.content_type,
+                content_name=item.get_qualified_id(project.qualified_id),
+            ),
         )
 
     # =========================================================================
     # Helpers
     # =========================================================================
-
-    def _create_content_reference(
-        self,
-        content_type: ContentType,
-        item: Content[Any],
-    ) -> ContentReference:
-        """Create a reference to content in the active project.
-
-        :param content_type: Type of the content.
-        :param item: Content item.
-        :returns: Reference to the content.
-        """
-        active_project = self._project_service.active_project
-
-        if active_project is None:
-            raise RuntimeError("No active project.")
-
-        return ContentReference(
-            content_type=content_type,
-            qualified_id=item.get_qualified_id(active_project.qualified_id),
-        )
 
     def _get_content_widget(
         self,
@@ -524,7 +529,7 @@ class Workspace(QWidget):
         :param content_reference: Reference to the content.
         :returns: Tab name.
         """
-        content_type_name = content_reference.content_type.value.replace("_", " ").title()
+        content_type_name = content_reference.content_type.display_name
 
         if content_reference.qualified_id is None:
             return content_type_name
