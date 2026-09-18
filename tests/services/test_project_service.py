@@ -213,6 +213,34 @@ def test_save_project_deletes_removed_localization_languages(tmp_path: Path) -> 
 # =============================================================================
 
 
+def test_has_unsaved_changes_returns_false_without_active_project(
+    project_service: ProjectService,
+) -> None:
+    """Return False when no project is active."""
+    assert project_service.has_unsaved_changes is False
+
+
+def test_has_unsaved_changes_returns_false_when_active_project_is_saved(
+    project_service: ProjectService,
+) -> None:
+    """Return False when the active project is saved."""
+    project_service.create_project(namespace="test", name="Test Mod")
+    project_service.save_project()
+
+    assert project_service.has_unsaved_changes is False
+
+
+def test_has_unsaved_changes_returns_true_when_active_project_is_modified(
+    project_service: ProjectService,
+) -> None:
+    """Return True when the active project has unsaved changes."""
+    project_service.create_project(namespace="test", name="Test Mod")
+
+    project_service.mark_project_as_modified()
+
+    assert project_service.has_unsaved_changes is True
+
+
 def test_mark_project_as_modified_marks_active_project_as_modified(
     project_service: ProjectService,
 ) -> None:

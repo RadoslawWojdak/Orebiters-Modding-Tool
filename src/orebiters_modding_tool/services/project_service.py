@@ -44,6 +44,11 @@ class ProjectService:
         """Return whether a project is currently active."""
         return self._active_project is not None
 
+    @property
+    def has_unsaved_changes(self) -> bool:
+        """Return whether the active project has unsaved changes."""
+        return self._active_project is not None and self._active_project.has_unsaved_changes
+
     def get_content_references(self, content_type: ContentType) -> Sequence[ContentReference]:
         """Return references to content of the specified type.
 
