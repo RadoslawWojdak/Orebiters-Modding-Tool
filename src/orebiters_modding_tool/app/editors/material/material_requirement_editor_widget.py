@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
-from orebiters_modding_tool.app.editors.editor_field import EditorField
+from orebiters_modding_tool.app.editors.editor_field import EditorField, EditorVariantField
 from orebiters_modding_tool.domain.content import ContentReference
 from orebiters_modding_tool.domain.material import MaterialRequirement
 
@@ -44,16 +44,18 @@ class MaterialRequirementEditorWidget(BaseEditorWidget[MaterialRequirement]):
 
         return choice.qualified_id or ""
 
-    FIELDS = (
+    FIELDS: tuple[EditorField | EditorVariantField, ...] = (
         EditorField(
             name="material_reference",
             label="Material",
+            value_type=ContentReference,
             choices_provider=_get_material_choices,
             choice_formatter=_format_material_choice,
         ),
         EditorField(
             name="amount",
             label="Amount",
+            value_type=int,
         ),
     )
 

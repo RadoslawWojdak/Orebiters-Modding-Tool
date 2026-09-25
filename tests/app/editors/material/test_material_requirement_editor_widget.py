@@ -1,7 +1,7 @@
 import pytest
 from PySide6.QtWidgets import QApplication
 
-from orebiters_modding_tool.app.editors.material_requirement_editor_widget import (
+from orebiters_modding_tool.app.editors.material.material_requirement_editor_widget import (
     MaterialRequirementEditorWidget,
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
@@ -12,7 +12,9 @@ from tests.factories.material_requirement import MaterialRequirementFactory
 
 def test_displays_material_and_amount(qapp: QApplication) -> None:
     """Display the material and amount fields."""
-    material_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    material_reference = ContentReferenceFactory.create(
+        qualified_id="orebiters.core.materials.copper"
+    )
     requirement = MaterialRequirementFactory.create(material_reference, 3)
 
     editor = MaterialRequirementEditorWidget(
@@ -20,8 +22,8 @@ def test_displays_material_and_amount(qapp: QApplication) -> None:
         context={"material_references_provider": lambda: [material_reference]},
     )
 
-    material_field = editor._fields["material_reference"]
-    amount_field = editor._fields["amount"]
+    material_field = editor._get_field_widget("material_reference")
+    amount_field = editor._get_field_widget("amount")
 
     assert isinstance(material_field, DynamicComboBox)
     assert material_field.currentData() == material_reference
@@ -32,8 +34,8 @@ def test_get_material_choices_returns_all_references_without_exclusion_provider(
     qapp: QApplication,
 ) -> None:
     """Return all material references when no exclusion provider is configured."""
-    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
-    second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
+    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.copper")
+    second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.gold")
 
     editor = MaterialRequirementEditorWidget(
         MaterialRequirementFactory.create(first_reference),
@@ -45,9 +47,11 @@ def test_get_material_choices_returns_all_references_without_exclusion_provider(
 
 def test_get_material_choices_excludes_references_from_provider(qapp: QApplication) -> None:
     """Exclude material references returned by the exclusion provider."""
-    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
-    excluded_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
-    third_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.copper")
+    excluded_reference = ContentReferenceFactory.create(
+        qualified_id="orebiters.core.materials.gold"
+    )
+    third_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.iron")
 
     editor = MaterialRequirementEditorWidget(
         MaterialRequirementFactory.create(first_reference),
@@ -68,8 +72,10 @@ def test_get_material_choices_passes_current_material_to_exclusion_provider(
     qapp: QApplication,
 ) -> None:
     """Pass the current material reference to the exclusion provider."""
-    current_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
-    other_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
+    current_reference = ContentReferenceFactory.create(
+        qualified_id="orebiters.core.materials.copper"
+    )
+    other_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.gold")
     received_materials: list[ContentReference | None] = []
 
     editor = MaterialRequirementEditorWidget(
@@ -90,8 +96,8 @@ def test_get_material_choices_passes_current_material_to_exclusion_provider(
 
 def test_refreshes_material_choices_from_current_provider(qapp: QApplication) -> None:
     """Refresh material choices using the current provider values."""
-    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
-    second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.gold")
+    first_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.copper")
+    second_reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.gold")
     references = [first_reference]
 
     editor = MaterialRequirementEditorWidget(
@@ -99,7 +105,7 @@ def test_refreshes_material_choices_from_current_provider(qapp: QApplication) ->
         context={"material_references_provider": lambda: references},
     )
 
-    material_field = editor._fields["material_reference"]
+    material_field = editor._get_field_widget("material_reference")
 
     assert isinstance(material_field, DynamicComboBox)
     assert material_field.count() == 1
@@ -117,10 +123,10 @@ def test_refreshes_material_choices_from_current_provider(qapp: QApplication) ->
 
 def test_format_material_choice_returns_qualified_id(qapp: QApplication) -> None:
     """Format a material choice using its qualified ID."""
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.copper")
+    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.copper")
 
     assert MaterialRequirementEditorWidget._format_material_choice(reference) == (
-        "orebiters.core.copper"
+        "orebiters.core.materials.copper"
     )
 
 

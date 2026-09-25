@@ -31,7 +31,7 @@ def test_create_item_creates_non_editable_item_with_content_reference(
 ) -> None:
     """Create a non-editable item with its content reference."""
     explorer = ProjectExplorer(project_service)
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.iron")
 
     item = explorer._create_item("Iron", content_reference=reference)
 
@@ -186,7 +186,10 @@ def test_get_active_project_references_returns_references_for_active_project(
     references = explorer._get_active_project_references(ContentType.MATERIALS)
 
     assert references == [
-        ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron"),
+        ContentReference(
+            content_type=ContentType.MATERIALS,
+            qualified_id="test.test_mod.materials.iron",
+        ),
     ]
 
 
@@ -208,7 +211,7 @@ def test_content_reference_sort_key_returns_casefolded_content_id(
 ) -> None:
     """Return a case-insensitive sort key for a content reference."""
     explorer = ProjectExplorer(project_service)
-    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.Copper")
+    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.materials.Copper")
 
     assert explorer._content_reference_sort_key(reference) == "copper"
 
@@ -224,7 +227,7 @@ def test_double_click_emits_content_open_requested(
         "Iron",
         content_reference=ContentReferenceFactory.create(
             content_type=ContentType.MATERIALS,
-            qualified_id="orebiters.core.iron",
+            qualified_id="orebiters.core.materials.iron",
         ),
     )
     explorer._model.appendRow(item)
@@ -237,7 +240,9 @@ def test_double_click_emits_content_open_requested(
     explorer._handle_item_double_clicked(index)
 
     assert received_references == [
-        ContentReference(content_type=ContentType.MATERIALS, qualified_id="orebiters.core.iron"),
+        ContentReference(
+            content_type=ContentType.MATERIALS, qualified_id="orebiters.core.materials.iron"
+        ),
     ]
 
 
@@ -289,7 +294,10 @@ def test_double_click_emits_content_reference_for_content_item(
     explorer._handle_item_double_clicked(index)
 
     assert received_references == [
-        ContentReference(content_type=ContentType.MATERIALS, qualified_id="test.test_mod.iron"),
+        ContentReference(
+            content_type=ContentType.MATERIALS,
+            qualified_id="test.test_mod.materials.iron",
+        ),
     ]
 
 
@@ -362,15 +370,15 @@ def test_get_expanded_categories_returns_expanded_content_types(
 
     expected_rows = generate_expected_rows()
     materials_item = explorer._model.item(expected_rows.index("Materials"))
-    resources_item = explorer._model.item(expected_rows.index("Resources"))
+    mineables_item = explorer._model.item(expected_rows.index("Mineables"))
 
     assert materials_item is not None
-    assert resources_item is not None
+    assert mineables_item is not None
 
     explorer._tree_view.expand(materials_item.index())
-    explorer._tree_view.expand(resources_item.index())
+    explorer._tree_view.expand(mineables_item.index())
 
-    assert explorer._get_expanded_categories() == {ContentType.MATERIALS, ContentType.RESOURCES}
+    assert explorer._get_expanded_categories() == {ContentType.MATERIALS, ContentType.MINEABLES}
 
 
 def test_get_expanded_categories_ignores_collapsed_categories(
@@ -395,17 +403,17 @@ def test_restore_expanded_categories_expands_requested_content_types(
     """Expand the requested content categories."""
     explorer = ProjectExplorer(project_service)
 
-    explorer._restore_expanded_categories({ContentType.ITEMS, ContentType.RESOURCES})
+    explorer._restore_expanded_categories({ContentType.ITEMS, ContentType.MINEABLES})
 
     expected_rows = generate_expected_rows()
     items_item = explorer._model.item(expected_rows.index("Items"))
     materials_item = explorer._model.item(expected_rows.index("Materials"))
-    resources_item = explorer._model.item(expected_rows.index("Resources"))
+    mineables_item = explorer._model.item(expected_rows.index("Mineables"))
 
     assert items_item is not None
     assert materials_item is not None
-    assert resources_item is not None
+    assert mineables_item is not None
 
     assert explorer._tree_view.isExpanded(items_item.index())
     assert not explorer._tree_view.isExpanded(materials_item.index())
-    assert explorer._tree_view.isExpanded(resources_item.index())
+    assert explorer._tree_view.isExpanded(mineables_item.index())

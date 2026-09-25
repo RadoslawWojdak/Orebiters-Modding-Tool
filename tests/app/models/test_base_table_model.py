@@ -29,6 +29,7 @@ class BaseTableModelSample(BaseTableModel[Item]):
             getter=lambda item: item.value,
             setter=lambda item, value: setattr(item, "value", value),
             tooltip="Item value",
+            sorter=lambda item: -item.value,
         ),
         Column(
             header="Read-only",
@@ -98,6 +99,17 @@ def test_data_returns_display_and_edit_values(qapp: QApplication) -> None:
     assert model.data(value_index, Qt.ItemDataRole.EditRole) == 20
 
 
+def test_data_returns_sort_value(qapp: QApplication) -> None:
+    """Return the configured sort value for the sort role."""
+    model = create_model()
+
+    sorter_index = model.index(0, 1)
+    getter_index = model.index(0, 0)
+
+    assert model.data(sorter_index, BaseTableModel.SORT_ROLE) == -10
+    assert model.data(getter_index, BaseTableModel.SORT_ROLE) == "First"
+
+
 def test_data_returns_column_tooltip(qapp: QApplication) -> None:
     """Return the configured column tooltip."""
     model = create_model()
@@ -118,7 +130,7 @@ def test_data_returns_none_for_unsupported_role(qapp: QApplication) -> None:
     model = create_model()
     index = model.index(0, 0)
 
-    assert model.data(index, Qt.ItemDataRole.UserRole) is None
+    assert model.data(index, Qt.ItemDataRole.UserRole + 1) is None
 
 
 def test_header_data_returns_horizontal_header_and_tooltip(qapp: QApplication) -> None:

@@ -9,6 +9,7 @@ class Column[T]:
     header: str
     tooltip: str
     getter: Callable[[T], object]
+    sorter: Callable[[T], object] | None = None
     setter: Callable[[T, object], None] | None = None
     filterable: bool = True
     sortable: bool = True

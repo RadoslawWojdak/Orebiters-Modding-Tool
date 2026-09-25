@@ -1,10 +1,13 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
+from orebiters_modding_tool.app.models.mineable_table_model import MineableTableModel
 from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
     TableSortFilterProxyModel,
 )
+from orebiters_modding_tool.domain.mineable import MineableType
 from tests.app.helpers.table import ItemSample, ItemSampleTableModel, create_items
+from tests.factories.mineable import MineableFactory
 
 
 def create_proxy_model(items: list[ItemSample]) -> TableSortFilterProxyModel:
@@ -65,6 +68,15 @@ def test_sort_by_different_columns(qapp: QApplication) -> None:
     assert get_item_ids(proxy_model) == ["x", "z", "y"]
 
 
+def test_sort_uses_sort_role_instead_of_display_role(qapp: QApplication) -> None:
+    """Sort rows using the value provided by the sort role."""
+    proxy_model = create_proxy_model(create_items())
+
+    proxy_model.sort(1, Qt.SortOrder.AscendingOrder)
+
+    assert get_item_ids(proxy_model) == ["y", "z", "x"]
+
+
 def test_sort_is_case_insensitive(qapp: QApplication) -> None:
     """Sort values without considering letter case."""
     items = [
@@ -89,7 +101,7 @@ def test_sort_non_sortable_column_does_not_change_row_order(qapp: QApplication) 
 
 
 def test_is_column_sortable_returns_column_configuration(qapp: QApplication) -> None:
-    """Return whether a column is sortable."""
+    """Return whether a column can be sorted."""
     proxy_model = create_proxy_model(create_items())
 
     assert proxy_model.is_column_sortable(0)
@@ -110,6 +122,40 @@ def test_sort_handles_none_values(qapp: QApplication) -> None:
     proxy_model.sort(1, Qt.SortOrder.AscendingOrder)
 
     assert get_item_ids(proxy_model) == ["a", "b", "c"]
+
+
+def test_sort_handles_enum_values(qapp: QApplication) -> None:
+    """Sort enum values using their underlying values."""
+    mineables = [
+        MineableFactory.create(id="resource", type=MineableType.RESOURCE),
+        MineableFactory.create(id="artifact", type=MineableType.ARTIFACT),
+        MineableFactory.create(id="obstacle", type=MineableType.OBSTACLE),
+    ]
+    proxy_model = TableSortFilterProxyModel(MineableTableModel(mineables))
+
+    proxy_model.sort(2, Qt.SortOrder.AscendingOrder)
+
+    assert [
+        proxy_model.data(proxy_model.index(row, 0), Qt.ItemDataRole.DisplayRole)
+        for row in range(proxy_model.rowCount())
+    ] == ["artifact", "obstacle", "resource"]
+
+
+def test_sort_handles_tuple_values(qapp: QApplication) -> None:
+    """Sort tuple values using their individual elements."""
+    mineables = [
+        MineableFactory.create(id="deep", min_depth=10, max_depth=50),
+        MineableFactory.create(id="shallow", min_depth=0, max_depth=100),
+        MineableFactory.create(id="short", min_depth=10, max_depth=20),
+    ]
+    proxy_model = TableSortFilterProxyModel(MineableTableModel(mineables))
+
+    proxy_model.sort(7, Qt.SortOrder.AscendingOrder)
+
+    assert [
+        proxy_model.data(proxy_model.index(row, 0), Qt.ItemDataRole.DisplayRole)
+        for row in range(proxy_model.rowCount())
+    ] == ["shallow", "short", "deep"]
 
 
 # =============================================================================

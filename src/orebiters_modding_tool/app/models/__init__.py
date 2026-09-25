@@ -1,1 +1,2 @@
 from .material_table_model import MaterialTableModel as MaterialTableModel
+from .mineable_table_model import MineableTableModel as MineableTableModel

@@ -6,10 +6,14 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox, QScrollArea
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
-from orebiters_modding_tool.app.editors.material_editor_widget import MaterialEditorWidget
+from orebiters_modding_tool.app.editors.content.content_editor_widget import ContentEditorWidget
+from orebiters_modding_tool.app.editors.material.material_editor_widget import MaterialEditorWidget
+from orebiters_modding_tool.app.editors.mineable.mineable_editor_widget import MineableEditorWidget
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.models.content_factory import CONTENT_FACTORY_REGISTRY
+from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
+from orebiters_modding_tool.app.models.mineable_table_model import MineableTableModel
 from orebiters_modding_tool.app.widgets.content_overview import ContentOverviewWidget
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
 from orebiters_modding_tool.app.widgets.workspace import Workspace
@@ -22,10 +26,12 @@ from orebiters_modding_tool.domain.content import (
 from orebiters_modding_tool.domain.material import Material
 from tests.factories.content import ContentReferenceFactory
 from tests.factories.material import MaterialFactory
+from tests.factories.mineable import MineableFactory
 
 
 def _get_editor_tab(
-    workspace: Workspace, item: Content[Any]
+    workspace: Workspace,
+    item: Content[Any],
 ) -> tuple[int, QScrollArea, BaseEditorWidget[Any]]:
     """Return the tab, scroll area, and editor for a content item."""
     index = workspace._find_editor_tab(item)
@@ -40,12 +46,22 @@ def _get_editor_tab(
     return index, editor_tab, editor
 
 
+# =============================================================================
+# Initialization
+# =============================================================================
+
+
 def test_initializes_workspace(workspace: Workspace) -> None:
     """Initialize the workspace with its expected tab structure."""
     assert workspace._tab_widget.count() == 1
     assert isinstance(workspace._tab_widget.widget(0), WelcomeWidget)
     assert workspace._tab_widget.tabText(0) == "Welcome"
     assert workspace._tab_widget.tabsClosable()
+
+
+# =============================================================================
+# Content
+# =============================================================================
 
 
 def test_open_content_creates_content_tab(
@@ -135,9 +151,9 @@ def test_open_content_activates_existing_editor_for_specific_content(
 
 def test_open_content_raises_for_missing_content(workspace: Workspace) -> None:
     """Raise an error when opening a reference to missing content."""
-    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.missing")
+    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.contents.missing")
 
-    with pytest.raises(ValueError, match="Content not found: test.test_mod.missing."):
+    with pytest.raises(ValueError, match="Content not found: test.test_mod.contents.missing."):
         workspace.open_content(reference)
 
 
@@ -149,14 +165,24 @@ def test_open_content_raises_without_active_project(workspace: Workspace) -> Non
         workspace.open_content(ContentReferenceFactory.create())
 
 
-def test_create_content_model_returns_material_table_model(
+@pytest.mark.parametrize(
+    ("content_type", "expected_model_type"),
+    [
+        (ContentType.MATERIALS, MaterialTableModel),
+        (ContentType.MINEABLES, MineableTableModel),
+    ],
+)
+def test_create_content_model_returns_expected_table_model(
     workspace: Workspace,
-    materials_category_reference: ContentReference,
+    content_type: ContentType,
+    expected_model_type: type[ContentTableModel[Any]],
 ) -> None:
-    """Create a material table model for the materials content type."""
-    model = workspace._create_content_model(materials_category_reference)
+    """Create the appropriate table model for each supported content type."""
+    reference = ContentReferenceFactory.create(content_type=content_type)
 
-    assert isinstance(model, MaterialTableModel)
+    model = workspace._create_content_model(reference)
+
+    assert isinstance(model, expected_model_type)
 
 
 def test_create_content_model_raises_without_active_project(
@@ -218,6 +244,11 @@ def test_add_content_opens_content_id_dialog(
     dialog_class.return_value.exec.assert_called_once()
 
 
+# =============================================================================
+# Content CRUD
+# =============================================================================
+
+
 def test_create_content_adds_item_to_project_model_and_scrollable_editor(
     workspace: Workspace,
     materials_category_reference: ContentReference,
@@ -263,7 +294,7 @@ def test_create_content_emits_content_changed(
         ContentChange(
             change_type=ContentChangeType.CREATED,
             content_type=ContentType.MATERIALS,
-            content_name="test.test_mod.iron_ore",
+            content_name="test.test_mod.materials.iron_ore",
         )
     ]
 
@@ -299,6 +330,7 @@ def test_edit_content_opens_editor_without_duplicate(
     workspace._edit_content(materials_category_reference, [material])
 
     assert workspace._tab_widget.count() == initial_tab_count
+
     matching_tabs = [
         index
         for index in range(workspace._tab_widget.count())
@@ -414,9 +446,11 @@ def test_delete_content_emits_actual_removed_count(
     workspace.open_content(materials_category_reference)
     workspace._create_content(materials_category_reference, "iron_ore")
     workspace._create_content(materials_category_reference, "copper_ore")
+
     project = workspace._project_service.active_project
     assert project is not None
     materials = list(project.content[ContentType.MATERIALS])
+
     received: list[ContentChange] = []
     workspace.content_changed.connect(received.append)
 
@@ -469,6 +503,11 @@ def test_close_project_tabs_keeps_welcome_and_closes_project_tabs(
     assert workspace._tab_widget.tabText(0) == "Welcome"
 
 
+# =============================================================================
+# Content creation
+# =============================================================================
+
+
 def test_create_content_item_creates_material(
     materials_category_reference: ContentReference,
 ) -> None:
@@ -493,26 +532,52 @@ def test_create_content_item_raises_for_unsupported_content_type() -> None:
         Workspace._create_content_item(reference, "iron_ore")
 
 
-def test_create_content_editor_creates_material_editor(
+# =============================================================================
+# Editors
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("content_type", "item_factory", "expected_editor_type"),
+    [
+        (ContentType.MATERIALS, MaterialFactory.create, MaterialEditorWidget),
+        (ContentType.MINEABLES, MineableFactory.create, MineableEditorWidget),
+    ],
+)
+def test_create_content_editor_creates_expected_editor(
     workspace: Workspace,
-    materials_category_reference: ContentReference,
+    content_type: ContentType,
+    item_factory: Any,
+    expected_editor_type: type[ContentEditorWidget[Any]],
 ) -> None:
-    """Create a material editor for a material item."""
-    item = MaterialFactory.create()
+    """Create the appropriate editor for each supported content type."""
+    item = item_factory()
+    reference = ContentReferenceFactory.create(content_type=content_type)
 
-    editor = workspace._create_content_editor(materials_category_reference, item)
+    editor = workspace._create_content_editor(reference, item)
 
-    assert isinstance(editor, MaterialEditorWidget)
+    assert isinstance(editor, expected_editor_type)
     assert editor.item is item
 
 
-def test_create_content_editor_raises_for_invalid_material(
+@pytest.mark.parametrize(
+    ("content_type", "item_factory", "expected_type_name"),
+    [
+        (ContentType.MATERIALS, MineableFactory.create, "Material"),
+        (ContentType.MINEABLES, MaterialFactory.create, "Mineable"),
+    ],
+)
+def test_create_content_editor_raises_for_invalid_item(
     workspace: Workspace,
-    materials_category_reference: ContentReference,
+    content_type: ContentType,
+    item_factory: Any,
+    expected_type_name: str,
 ) -> None:
-    """Raise an error when creating a material editor for an invalid item."""
-    with pytest.raises(TypeError, match="Expected a Material."):
-        workspace._create_content_editor(materials_category_reference, object())  # type: ignore[arg-type]
+    """Raise an error when the item does not match the content type."""
+    reference = ContentReferenceFactory.create(content_type=content_type)
+
+    with pytest.raises(TypeError, match=f"Expected a {expected_type_name}."):
+        workspace._create_content_editor(reference, item_factory())
 
 
 def test_create_content_editor_raises_for_unsupported_content_type(workspace: Workspace) -> None:
@@ -520,10 +585,60 @@ def test_create_content_editor_raises_for_unsupported_content_type(workspace: Wo
     reference = ContentReference(content_type=ContentType.MATERIALS)
 
     with (
-        patch.dict(BaseEditorWidget._registry, {}, clear=True),
+        patch.dict(ContentEditorWidget._registry, {}, clear=True),
         pytest.raises(ValueError, match="Unsupported content type"),
     ):
         workspace._create_content_editor(reference, MaterialFactory.create())
+
+
+# =============================================================================
+# Editor context
+# =============================================================================
+
+
+@pytest.mark.parametrize(
+    ("create_context", "provider_key"),
+    [
+        ("_create_material_editor_context", "material_references_provider"),
+        ("_create_mineable_editor_context", "item_references_provider"),
+    ],
+)
+def test_create_editor_context_contains_project_information(
+    workspace: Workspace,
+    create_context: str,
+    provider_key: str,
+) -> None:
+    """Create editor context with project information and a reference provider."""
+    context = getattr(workspace, create_context)()
+
+    project = workspace._project_service.active_project
+    assert project is not None
+
+    assert context["mod_id"] == project.qualified_id
+    assert callable(context[provider_key])
+
+
+@pytest.mark.parametrize(
+    "create_context",
+    [
+        "_create_material_editor_context",
+        "_create_mineable_editor_context",
+    ],
+)
+def test_create_editor_context_raises_without_active_project(
+    workspace: Workspace,
+    create_context: str,
+) -> None:
+    """Raise an error when creating editor context without an active project."""
+    workspace._project_service.close_project()
+
+    with pytest.raises(RuntimeError, match="No active project."):
+        getattr(workspace, create_context)()
+
+
+# =============================================================================
+# Editor saving
+# =============================================================================
 
 
 def test_saving_content_emits_updated_change_and_marks_project_modified(
@@ -550,7 +665,7 @@ def test_saving_content_emits_updated_change_and_marks_project_modified(
     assert received[-1] == ContentChange(
         change_type=ContentChangeType.UPDATED,
         content_type=ContentType.MATERIALS,
-        content_name="test.test_mod.refined_iron",
+        content_name="test.test_mod.materials.refined_iron",
     )
 
 
@@ -588,23 +703,9 @@ def test_saving_new_content_keeps_it_new(
     assert project.has_unsaved_changes is True
 
 
-def test_create_material_editor_context_contains_project_information(workspace: Workspace) -> None:
-    """Create material editor context from the active project."""
-    context = workspace._create_material_editor_context()
-
-    project = workspace._project_service.active_project
-    assert project is not None
-
-    assert context["mod_id"] == project.qualified_id
-    assert callable(context["material_references_provider"])
-
-
-def test_create_material_editor_context_raises_without_active_project(workspace: Workspace) -> None:
-    """Raise an error when creating editor context without an active project."""
-    workspace._project_service.close_project()
-
-    with pytest.raises(RuntimeError, match="No active project."):
-        workspace._create_material_editor_context()
+# =============================================================================
+# Helpers
+# =============================================================================
 
 
 def test_get_content_widget_returns_open_content_widget(
@@ -775,7 +876,7 @@ def test_get_tab_name_returns_content_type_and_content_id() -> None:
     """Return the content type name and content ID for a content reference."""
     reference = ContentReferenceFactory.create(
         content_type=ContentType.MATERIALS,
-        qualified_id="orebiters.core.iron",
+        qualified_id="orebiters.core.materials.iron",
     )
 
     assert Workspace._get_tab_name(reference) == "Materials iron"

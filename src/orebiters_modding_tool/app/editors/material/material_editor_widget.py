@@ -2,12 +2,12 @@ from collections.abc import Sequence
 
 from PySide6.QtWidgets import QWidget
 
-from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
-from orebiters_modding_tool.app.editors.editor_field import EditorField
-from orebiters_modding_tool.app.editors.material_localization_editor_widget import (
+from orebiters_modding_tool.app.editors.content.content_editor_widget import ContentEditorWidget
+from orebiters_modding_tool.app.editors.editor_field import EditorField, EditorVariantField
+from orebiters_modding_tool.app.editors.material.material_localization_editor_widget import (
     MaterialLocalizationEditorWidget,
 )
-from orebiters_modding_tool.app.editors.material_requirement_editor_widget import (
+from orebiters_modding_tool.app.editors.material.material_requirement_editor_widget import (
     MaterialRequirementEditorWidget,
 )
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
@@ -16,16 +16,13 @@ from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import Material, MaterialRequirement
 
 
-class MaterialEditorWidget(BaseEditorWidget[Material]):
+class MaterialEditorWidget(ContentEditorWidget[Material]):
     """Editor for a material."""
 
     CONTENT_TYPE = ContentType.MATERIALS
 
     def _get_qualified_id(self) -> str:
-        """Return the qualified material ID.
-
-        :returns: Qualified material ID.
-        """
+        """Return the qualified material ID."""
         mod_id = self._context["mod_id"]
 
         if not isinstance(mod_id, str):
@@ -63,7 +60,7 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
 
         return any(reference not in excluded_references for reference in material_references)
 
-    FIELDS = (
+    FIELDS: tuple[EditorField | EditorVariantField, ...] = (
         EditorField(
             name="qualified_id",
             label="Qualified ID:",
@@ -109,10 +106,10 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
         self,
         current_material: ContentReference | None,
     ) -> Sequence[ContentReference]:
-        """Return material references that cannot be selected in the current widget.
+        """Return material references that cannot be selected.
 
-        :param current_material: Reference to the widget's current material.
-        :returns: Sequence of material references that cannot be selected.
+        :param current_material: Reference selected by the current material.
+        :returns: Excluded material references.
         """
         excluded_references = {
             self._get_material_reference(),
@@ -125,7 +122,7 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
 
     def _get_used_material_references(self) -> Sequence[ContentReference]:
         """Return material references currently used in crafting materials."""
-        crafting_materials = self._fields.get("crafting_materials")
+        crafting_materials = self._get_field_widget("crafting_materials")
 
         if not isinstance(crafting_materials, ListWidget):
             return ()
@@ -138,7 +135,7 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
             if not isinstance(item_widget, MaterialRequirementEditorWidget):
                 raise TypeError("Crafting material item must be a MaterialRequirementEditorWidget.")
 
-            material_field = item_widget._fields["material_reference"]
+            material_field = item_widget._get_field_widget("material_reference")
 
             if not isinstance(material_field, DynamicComboBox):
                 raise TypeError("Material field must be a DynamicComboBox.")
@@ -175,5 +172,12 @@ class MaterialEditorWidget(BaseEditorWidget[Material]):
 
         if not isinstance(material_references, Sequence):
             raise TypeError("Material references provider must return a sequence.")
+
+        if not all(
+            isinstance(reference, ContentReference)
+            and reference.content_type == Material.CONTENT_TYPE
+            for reference in material_references
+        ):
+            raise TypeError("Material references provider must return only material references.")
 
         return material_references

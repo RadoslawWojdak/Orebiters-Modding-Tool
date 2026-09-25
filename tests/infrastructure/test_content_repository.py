@@ -9,6 +9,7 @@ from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.content_repository import ContentRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from tests.factories.content import ContentFactory
+from tests.factories.material import MaterialFactory
 
 
 class ContentRepositorySample(ContentRepository[Content[Any]]):
@@ -21,7 +22,7 @@ class ContentRepositorySample(ContentRepository[Content[Any]]):
         return "sample"
 
     def _serialize(self, project: Project, content: Content[Any]) -> dict[str, object]:
-        return {"id": content.get_qualified_id(project.qualified_id)}
+        return {"id": f"{project.qualified_id}.contents.{content.id}"}
 
     def _deserialize(self, data: dict[str, Any]) -> Content[Any]:
         qualified_id = data["id"]
@@ -128,11 +129,11 @@ def test_save_writes_json_file(
     tmp_path: Path,
 ) -> None:
     """Write serialized content to a JSON file."""
-    content = ContentFactory.create()
+    material = MaterialFactory.create()
 
-    repository.save(project, content)
+    repository.save(project, material)
 
-    file_path = tmp_path / project.qualified_id / "sample" / f"{content.id}.json"
+    file_path = tmp_path / project.qualified_id / "sample" / f"{material.id}.json"
 
     assert file_path.is_file()
 
@@ -140,7 +141,7 @@ def test_save_writes_json_file(
         data = json.load(file)
 
     assert data == {
-        "id": content.get_qualified_id(project.qualified_id),
+        "id": f"{project.qualified_id}.contents.{material.id}",
     }
 
 

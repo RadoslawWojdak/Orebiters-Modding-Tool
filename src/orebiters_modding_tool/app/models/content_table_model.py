@@ -13,7 +13,7 @@ class ContentTableModel[T: Content[Any]](BaseTableModel[T]):
 
     _registry: ClassVar[dict[ContentType, type[ContentTableModel[Any]]]] = {}
 
-    CONTENT_STATE_ROLE = Qt.ItemDataRole.UserRole
+    CONTENT_STATE_ROLE = Qt.ItemDataRole.UserRole + 1
 
     def __init_subclass__(cls, **kwargs: Any) -> None:
         """Register concrete content table models."""

@@ -1,1 +1,2 @@
 from .material_repository import MaterialRepository as MaterialRepository
+from .mineable_repository import MineableRepository as MineableRepository

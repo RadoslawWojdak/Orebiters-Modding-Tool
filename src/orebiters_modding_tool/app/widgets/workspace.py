@@ -5,6 +5,7 @@ from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabWidget, QVBoxLayout,
 
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
+from orebiters_modding_tool.app.editors.content.content_editor_widget import ContentEditorWidget
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.models.content_factory import CONTENT_FACTORY_REGISTRY
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
@@ -13,6 +14,7 @@ from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewWidget,
 )
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
+from orebiters_modding_tool.domain import Mineable
 from orebiters_modding_tool.domain.content import (
     Content,
     ContentReference,
@@ -310,7 +312,7 @@ class Workspace(QWidget):
         self,
         content_reference: ContentReference,
         item: Content[Any],
-    ) -> BaseEditorWidget[Any]:
+    ) -> ContentEditorWidget[Any]:
         """Create an editor for a content item.
 
         :param content_reference: Reference to the content.
@@ -321,7 +323,7 @@ class Workspace(QWidget):
         content_type = content_reference.content_type
 
         try:
-            editor_class = BaseEditorWidget.get_class(content_type)
+            editor_class = ContentEditorWidget.get_class(content_type)
         except KeyError:
             raise ValueError(f"Unsupported content type: {content_type}.") from None
 
@@ -329,6 +331,10 @@ class Workspace(QWidget):
             if not isinstance(item, Material):
                 raise TypeError("Expected a Material.")
             context = self._create_material_editor_context()
+        elif content_type is ContentType.MINEABLES:
+            if not isinstance(item, Mineable):
+                raise TypeError("Expected a Mineable.")
+            context = self._create_mineable_editor_context()
         else:
             raise ValueError(f"Unsupported content type: {content_type}.")
 
@@ -365,6 +371,23 @@ class Workspace(QWidget):
         return {
             "mod_id": active_project.qualified_id,
             "material_references_provider": (
+                lambda: self._project_service.get_content_references(ContentType.MATERIALS)
+            ),
+        }
+
+    def _create_mineable_editor_context(self) -> dict[str, object]:
+        """Create context required by the mineable editor.
+
+        :returns: Mineable editor context.
+        """
+        active_project = self._project_service.active_project
+
+        if active_project is None:
+            raise RuntimeError("No active project.")
+
+        return {
+            "mod_id": active_project.qualified_id,
+            "item_references_provider": (
                 lambda: self._project_service.get_content_references(ContentType.MATERIALS)
             ),
         }

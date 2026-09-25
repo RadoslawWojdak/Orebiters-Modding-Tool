@@ -11,6 +11,8 @@ class BaseTableModel[T](QAbstractTableModel):
 
     COLUMNS: tuple[Column[T], ...] = ()
 
+    SORT_ROLE = Qt.ItemDataRole.UserRole
+
     def __init__(self, items: list[T], parent: QObject | None = None) -> None:
         """Initialize the table model.
 
@@ -57,6 +59,12 @@ class BaseTableModel[T](QAbstractTableModel):
         column = self.COLUMNS[index.column()]
 
         if role in (Qt.ItemDataRole.DisplayRole, Qt.ItemDataRole.EditRole):
+            return column.getter(item)
+
+        if role == BaseTableModel.SORT_ROLE:
+            if column.sorter is not None:
+                return column.sorter(item)
+
             return column.getter(item)
 
         if role == Qt.ItemDataRole.ToolTipRole:

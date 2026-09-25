@@ -2,20 +2,15 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Any, ClassVar, get_args, get_origin
 
+from orebiters_modding_tool.domain.enums import DisplayEnum
 
-class ContentType(Enum):
+
+class ContentType(DisplayEnum):
     """Types of content available in a mod project."""
-
-    _value_: str
 
     # ITEMS = ("items", "Items", "Item")
     MATERIALS = ("materials", "Materials", "Material")
-    # RESOURCES = ("resources", "Resources", "Resource")
-
-    def __init__(self, value: str, display_name: str, singular_display_name: str) -> None:
-        self._value_ = value
-        self.display_name = display_name
-        self.singular_display_name = singular_display_name
+    MINEABLES = ("mineables", "Mineables", "Mineable")
 
 
 class ContentState(Enum):
@@ -84,7 +79,7 @@ class ContentReference:
         if self.qualified_id is None:
             raise ValueError("Content reference does not target specific content.")
 
-        return self.qualified_id.split(".")[2]
+        return self.qualified_id.split(".")[3]
 
 
 @dataclass(kw_only=True)
@@ -124,7 +119,7 @@ class Content[TLocalization: ContentLocalization]:
         :param mod_qualified_id: ID of the content owner.
         :returns: Fully qualified content ID.
         """
-        return f"{mod_qualified_id}.{self.id}"
+        return f"{mod_qualified_id}.{self.CONTENT_TYPE.value}.{self.id}"
 
     @classmethod
     def _resolve_localization_class(cls) -> None:

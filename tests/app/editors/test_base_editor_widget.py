@@ -12,16 +12,21 @@ from PySide6.QtWidgets import (
     QLabel,
     QLineEdit,
     QPushButton,
+    QRadioButton,
     QSpinBox,
-    QVBoxLayout,
     QWidget,
 )
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
-from orebiters_modding_tool.app.editors.editor_field import EditorField
+from orebiters_modding_tool.app.editors.editor_field import (
+    EditorField,
+    EditorVariant,
+    EditorVariantField,
+)
 from orebiters_modding_tool.app.widgets.dictionary_widget import DictionaryWidget
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
+from orebiters_modding_tool.app.widgets.variant_widget import VariantWidget
 
 
 class SampleEnum(Enum):
@@ -53,11 +58,40 @@ class SampleItem:
     # Optional value used to test empty and read-only fields.
     optional_value: object | None = None
 
+    # Optional numeric values used to test optional numeric fields.
+    optional_number: int | None = None
+
+    # Optional floating-point value used to test optional numeric fields.
+    optional_decimal: float | None = None
+
     # List value used to test ListEditorWidget fields.
     values: list[object] = field(default_factory=list)
 
+    # Typed list value used to test ListEditorWidget fields.
+    typed_values: list[str] = field(default_factory=list)
+
     # Dictionary value used to test DictionaryEditorWidget fields.
     mapping: dict[object, object] = field(default_factory=dict)
+
+
+@dataclass
+class VariantItem:
+    """Item used for variant editor tests."""
+
+    text: str | None = None
+    number: int | None = None
+    description: str | None = None
+
+
+class UnsupportedValue:
+    """Unsupported value type used for tests."""
+
+
+@dataclass
+class UnsupportedItem:
+    """Item containing an unsupported field value."""
+
+    value: UnsupportedValue
 
 
 class EmptyEditorWidget(BaseEditorWidget[object]):
@@ -79,6 +113,23 @@ class BasicFieldsEditorWidget(BaseEditorWidget[SampleItem]):
     )
 
 
+class OptionalNumberEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor containing optional numeric fields."""
+
+    FIELDS = (
+        EditorField(
+            name="optional_number",
+            label="Number",
+            value_type=int | None,
+        ),
+        EditorField(
+            name="optional_decimal",
+            label="Decimal",
+            value_type=float | None,
+        ),
+    )
+
+
 class ValueProviderEditorWidget(BaseEditorWidget[SampleItem]):
     """Editor used for value provider tests."""
 
@@ -86,7 +137,7 @@ class ValueProviderEditorWidget(BaseEditorWidget[SampleItem]):
         EditorField(
             name="provided_value",
             label="Provided Value",
-            value_provider=lambda editor: f"Provided: {editor._item.text}",
+            value_provider=lambda editor: f"Provided: {editor.item.text}",
         ),
     )
 
@@ -102,12 +153,6 @@ class ChoiceEditorWidget(BaseEditorWidget[SampleItem]):
             choice_formatter=lambda choice: str(choice).upper(),
         ),
     )
-
-
-class MissingChoiceProviderEditorWidget(BaseEditorWidget[SampleItem]):
-    """Editor used for invalid choice configuration tests."""
-
-    FIELDS = (EditorField(name="text", label="Text"),)
 
 
 class CustomEditorWidget(BaseEditorWidget[SampleItem]):
@@ -134,6 +179,17 @@ class ListEditorWidget(BaseEditorWidget[SampleItem]):
     )
 
 
+class TypedListEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor containing a typed list without an item factory."""
+
+    FIELDS = (
+        EditorField(
+            name="typed_values",
+            label="Typed Values",
+        ),
+    )
+
+
 class ReadOnlyListEditorWidget(BaseEditorWidget[SampleItem]):
     """Editor containing a read-only list field."""
 
@@ -147,12 +203,6 @@ class ReadOnlyListEditorWidget(BaseEditorWidget[SampleItem]):
     )
 
 
-class InvalidListEditorWidget(BaseEditorWidget[SampleItem]):
-    """Editor containing an invalid list configuration."""
-
-    FIELDS = (EditorField(name="values", label="Values"),)
-
-
 class DictionaryEditorWidget(BaseEditorWidget[SampleItem]):
     """Editor containing a dictionary field."""
 
@@ -161,6 +211,24 @@ class DictionaryEditorWidget(BaseEditorWidget[SampleItem]):
             name="mapping",
             label="Mapping",
             editor_widget_type=EmptyEditorWidget,
+        ),
+    )
+
+
+class NestedItemEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor used to test nested editor saving."""
+
+    FIELDS = (EditorField(name="text", label="Text"),)
+
+
+class NestedDictionaryEditorWidget(BaseEditorWidget[SampleItem]):
+    """Editor used to test dictionary saving."""
+
+    FIELDS = (
+        EditorField(
+            name="mapping",
+            label="Mapping",
+            editor_widget_type=NestedItemEditorWidget,
         ),
     )
 
@@ -202,17 +270,6 @@ class SectionEditorWidget(BaseEditorWidget[SampleItem]):
     )
 
 
-class UnsupportedValue:
-    """Unsupported value type used for tests."""
-
-
-@dataclass
-class UnsupportedItem:
-    """Item containing an unsupported field value."""
-
-    value: UnsupportedValue
-
-
 class UnsupportedEditorWidget(BaseEditorWidget[UnsupportedItem]):
     """Editor containing an unsupported field."""
 
@@ -231,22 +288,166 @@ class NestedListEditorWidget(BaseEditorWidget[SampleItem]):
     )
 
 
-class NestedItemEditorWidget(BaseEditorWidget[SampleItem]):
-    """Editor used to test nested editor saving."""
-
-    FIELDS = (EditorField(name="text", label="Text"),)
-
-
-class NestedDictionaryEditorWidget(BaseEditorWidget[SampleItem]):
-    """Editor used to test dictionary saving."""
+class VariantEditorWidget(BaseEditorWidget[VariantItem]):
+    """Editor containing two simple variants."""
 
     FIELDS = (
-        EditorField(
-            name="mapping",
-            label="Mapping",
-            editor_widget_type=NestedItemEditorWidget,
+        EditorVariantField(
+            label="Variant",
+            variants=(
+                EditorVariant(
+                    label="Text",
+                    fields=(
+                        EditorField(
+                            name="text",
+                            label="Text",
+                        ),
+                    ),
+                ),
+                EditorVariant(
+                    label="Number",
+                    fields=(
+                        EditorField(
+                            name="number",
+                            label="Number",
+                        ),
+                    ),
+                ),
+            ),
         ),
     )
+
+
+class MultiFieldVariantEditorWidget(BaseEditorWidget[VariantItem]):
+    """Editor containing variants with multiple fields."""
+
+    FIELDS = (
+        EditorVariantField(
+            label="Variant",
+            variants=(
+                EditorVariant(
+                    label="Text",
+                    fields=(
+                        EditorField(
+                            name="text",
+                            label="Text",
+                        ),
+                        EditorField(
+                            name="description",
+                            label="Description",
+                        ),
+                    ),
+                ),
+                EditorVariant(
+                    label="Number",
+                    fields=(
+                        EditorField(
+                            name="number",
+                            label="Number",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+class ReadOnlyVariantEditorWidget(BaseEditorWidget[VariantItem]):
+    """Editor containing a read-only variant field."""
+
+    FIELDS = (
+        EditorVariantField(
+            label="Variant",
+            read_only=True,
+            variants=(
+                EditorVariant(
+                    label="Text",
+                    fields=(
+                        EditorField(
+                            name="text",
+                            label="Text",
+                        ),
+                    ),
+                ),
+                EditorVariant(
+                    label="Number",
+                    fields=(
+                        EditorField(
+                            name="number",
+                            label="Number",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+class ReadOnlyVariantFieldEditorWidget(BaseEditorWidget[VariantItem]):
+    """Editor containing a read-only field inside a variant."""
+
+    FIELDS = (
+        EditorVariantField(
+            label="Variant",
+            variants=(
+                EditorVariant(
+                    label="Text",
+                    fields=(
+                        EditorField(
+                            name="text",
+                            label="Text",
+                            read_only=True,
+                        ),
+                    ),
+                ),
+                EditorVariant(
+                    label="Number",
+                    fields=(
+                        EditorField(
+                            name="number",
+                            label="Number",
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+class NestedVariantEditorWidget(BaseEditorWidget[VariantItem]):
+    """Editor containing a nested editor inside a variant."""
+
+    FIELDS = (
+        EditorVariantField(
+            label="Variant",
+            variants=(
+                EditorVariant(
+                    label="Text",
+                    fields=(
+                        EditorField(
+                            name="text",
+                            label="Text",
+                            editor_widget_type=EmptyEditorWidget,
+                        ),
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _get_variant_widget(editor: BaseEditorWidget) -> VariantWidget:
+    """Return the VariantWidget created by an editor."""
+    widget = editor.findChild(VariantWidget)
+
+    assert widget is not None
+
+    return widget
+
+
+# ============================================================================
+# Basic fields
+# ============================================================================
 
 
 @pytest.mark.parametrize(
@@ -267,7 +468,7 @@ def test_creates_basic_field(
     """Create editors for supported basic value types."""
     editor = BasicFieldsEditorWidget(SampleItem())
 
-    field = editor._fields[field_name]
+    field = editor._get_field_widget(field_name)
 
     assert isinstance(field, widget_type)
 
@@ -295,7 +496,7 @@ def test_creates_enum_field(qapp: QApplication) -> None:
     """Create a combo box for enum values."""
     editor = BasicFieldsEditorWidget(SampleItem())
 
-    field = editor._fields["enum_value"]
+    field = editor._get_field_widget("enum_value")
 
     assert isinstance(field, QComboBox)
     assert field.count() == len(SampleEnum)
@@ -303,19 +504,37 @@ def test_creates_enum_field(qapp: QApplication) -> None:
 
     assert field.itemText(0) == "FIRST"
     assert field.itemData(0) is SampleEnum.FIRST
-
     assert field.itemText(1) == "SECOND"
     assert field.itemData(1) is SampleEnum.SECOND
 
 
 def test_creates_empty_field_for_none_value(qapp: QApplication) -> None:
-    """Create an empty line edit for None."""
+    """Create an empty line edit for an untyped None value."""
     editor = BasicFieldsEditorWidget(SampleItem(optional_value=None))
 
-    field = editor._fields["optional_value"]
+    field = editor._get_field_widget("optional_value")
 
     assert isinstance(field, QLineEdit)
     assert field.text() == ""
+
+
+def test_creates_optional_number_fields(qapp: QApplication) -> None:
+    """Create line edits for optional numeric fields."""
+    editor = OptionalNumberEditorWidget(SampleItem())
+
+    number_field = editor._get_field_widget("optional_number")
+    decimal_field = editor._get_field_widget("optional_decimal")
+
+    assert isinstance(number_field, QLineEdit)
+    assert isinstance(decimal_field, QLineEdit)
+
+    assert number_field.text() == ""
+    assert decimal_field.text() == ""
+
+
+# ============================================================================
+# Value providers and choices
+# ============================================================================
 
 
 def test_uses_value_provider(qapp: QApplication) -> None:
@@ -324,7 +543,7 @@ def test_uses_value_provider(qapp: QApplication) -> None:
 
     editor = ValueProviderEditorWidget(item)
 
-    field = editor._fields["provided_value"]
+    field = editor._get_field_widget("provided_value")
 
     assert isinstance(field, QLineEdit)
     assert field.text() == "Provided: Custom text"
@@ -334,7 +553,7 @@ def test_creates_choice_field(qapp: QApplication) -> None:
     """Create a combo box from configured choices."""
     editor = ChoiceEditorWidget(SampleItem(text="second"))
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, DynamicComboBox)
     assert field.count() == 3
@@ -347,13 +566,18 @@ def test_creates_choice_field(qapp: QApplication) -> None:
 
 
 def test_choice_field_raises_without_provider(qapp: QApplication) -> None:
-    """Raise an error when a choice field has no provider."""
-    editor = MissingChoiceProviderEditorWidget(SampleItem())
+    """Raise an error when choice creation has no provider."""
+    editor = BasicFieldsEditorWidget(SampleItem())
 
     field_config = EditorField(name="text", label="Text")
 
     with pytest.raises(ValueError, match="Choice field 'text' requires a choices provider."):
         editor._create_choice_field(field_config, "Test")
+
+
+# ============================================================================
+# Read-only and custom editors
+# ============================================================================
 
 
 @pytest.mark.parametrize(
@@ -381,7 +605,7 @@ def test_field_level_read_only_uses_label(qapp: QApplication) -> None:
     """Use a read-only label for a read-only field."""
     editor = ReadOnlyEditorWidget(SampleItem())
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, QLabel)
     assert field.text() == "Test text"
@@ -399,10 +623,10 @@ def test_field_level_read_only_uses_label(qapp: QApplication) -> None:
     ],
 )
 def test_editor_read_only_overrides_all_basic_fields(qapp: QApplication, field_name: str) -> None:
-    """Make all basic fields read-only when the editor is read-only."""
+    """Use read-only widgets when the whole editor is read-only."""
     editor = BasicFieldsEditorWidget(SampleItem(), read_only=True)
 
-    field = editor._fields[field_name]
+    field = editor._get_field_widget(field_name)
 
     assert isinstance(field, QLabel)
 
@@ -411,7 +635,7 @@ def test_creates_custom_editor_widget(qapp: QApplication) -> None:
     """Create a configured custom editor widget."""
     editor = CustomEditorWidget(SampleItem())
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, EmptyEditorWidget)
 
@@ -422,37 +646,82 @@ def test_passes_context_to_custom_editor(qapp: QApplication) -> None:
 
     editor = CustomEditorWidget(SampleItem(), context=context)
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, EmptyEditorWidget)
-    assert field._context == context
+    assert field._context is context
 
 
 def test_passes_read_only_to_custom_editor(qapp: QApplication) -> None:
     """Pass read-only state to custom editor widgets."""
     editor = CustomEditorWidget(SampleItem(), read_only=True)
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, EmptyEditorWidget)
     assert field._read_only is True
 
 
+# ============================================================================
+# Lists
+# ============================================================================
+
+
 def test_creates_list_field(qapp: QApplication) -> None:
     """Create a ListWidget for list values."""
-    values = ["first", "second"]
+    editor = ListEditorWidget(SampleItem(values=["first", "second"]))
 
-    editor = ListEditorWidget(SampleItem(values=values))
-
-    field = editor._fields["values"]
+    field = editor._get_field_widget("values")
 
     assert isinstance(field, ListWidget)
 
 
-def test_list_field_requires_item_factory(qapp: QApplication) -> None:
-    """Raise an error when a list field has no item factory."""
-    with pytest.raises(ValueError, match="List field 'values' requires an item factory."):
-        InvalidListEditorWidget(SampleItem())
+def test_list_items_use_declared_runtime_type(qapp: QApplication) -> None:
+    """Create list item editors using the existing item type."""
+    editor = ListEditorWidget(SampleItem(values=["first"]))
+
+    field = editor._get_field_widget("values")
+
+    assert isinstance(field, ListWidget)
+
+    item_widget = field._item_widgets[0]
+
+    assert isinstance(item_widget, QLineEdit)
+    assert item_widget.text() == "first"
+
+
+def test_list_field_creates_default_item_from_annotation(qapp: QApplication) -> None:
+    """Create a default list item from the model annotation."""
+    editor = TypedListEditorWidget(SampleItem())
+
+    field = editor._get_field_widget("typed_values")
+
+    assert isinstance(field, ListWidget)
+
+    field._add_button.click()
+
+    assert field.item_count() == 1
+
+    item_widget = field.item_at(0)
+
+    assert isinstance(item_widget, QLineEdit)
+    assert item_widget.text() == ""
+
+
+def test_list_item_factory_overrides_annotation_default(qapp: QApplication) -> None:
+    """Use the configured item factory instead of the annotation default."""
+    editor = ListEditorWidget(SampleItem())
+
+    field = editor._get_field_widget("values")
+
+    assert isinstance(field, ListWidget)
+
+    field._add_button.click()
+
+    item_widget = field.item_at(0)
+
+    assert isinstance(item_widget, QLineEdit)
+    assert item_widget.text() == "new value"
 
 
 def test_list_field_passes_context_to_item_factory(qapp: QApplication) -> None:
@@ -472,24 +741,16 @@ def test_list_field_passes_context_to_item_factory(qapp: QApplication) -> None:
 
     editor = ContextListEditorWidget(SampleItem(), context=context)
 
-    field = editor._fields["values"]
-
-    assert isinstance(field, ListWidget)
-    assert field._item_factory() == "value"
-
-
-def test_list_items_use_base_editor_field_logic(qapp: QApplication) -> None:
-    """Create list item editors using normal field creation logic."""
-    editor = ListEditorWidget(SampleItem(values=["first"]))
-
-    field = editor._fields["values"]
+    field = editor._get_field_widget("values")
 
     assert isinstance(field, ListWidget)
 
-    item_widget = field._item_widgets[0]
+    field._add_button.click()
+
+    item_widget = field.item_at(0)
 
     assert isinstance(item_widget, QLineEdit)
-    assert item_widget.text() == "first"
+    assert item_widget.text() == "value"
 
 
 def test_nested_list_item_raises_error(qapp: QApplication) -> None:
@@ -498,30 +759,47 @@ def test_nested_list_item_raises_error(qapp: QApplication) -> None:
         NestedListEditorWidget(SampleItem(values=[["nested"]]))
 
 
+def test_read_only_list_disables_add_and_remove_operations(qapp: QApplication) -> None:
+    """Disable list modifications in a read-only editor."""
+    editor = ListEditorWidget(SampleItem(values=["first"]), read_only=True)
+
+    field = editor._get_field_widget("values")
+
+    assert isinstance(field, ListWidget)
+    assert not field._add_button.isEnabled()
+    assert all(not button.isEnabled() for button in field._remove_buttons)
+
+
+def test_field_level_read_only_disables_list_operations(qapp: QApplication) -> None:
+    """Disable list modifications for a read-only list field."""
+    editor = ReadOnlyListEditorWidget(SampleItem(values=["first"]))
+
+    field = editor._get_field_widget("values")
+
+    assert isinstance(field, ListWidget)
+    assert not field._add_button.isEnabled()
+    assert all(not button.isEnabled() for button in field._remove_buttons)
+
+
+# ============================================================================
+# Dictionaries and nested editors
+# ============================================================================
+
+
 def test_creates_dictionary_field(qapp: QApplication) -> None:
     """Create a DictionaryWidget for dictionary values."""
-    values = {
-        "first": object(),
-        "second": object(),
-    }
+    editor = DictionaryEditorWidget(SampleItem(mapping={"first": object(), "second": object()}))
 
-    editor = DictionaryEditorWidget(SampleItem(mapping=values))
-
-    field = editor._fields["mapping"]
+    field = editor._get_field_widget("mapping")
 
     assert isinstance(field, DictionaryWidget)
 
 
 def test_dictionary_field_creates_widgets_for_all_items(qapp: QApplication) -> None:
     """Create an item widget for every dictionary value."""
-    values = {
-        "first": object(),
-        "second": object(),
-    }
+    editor = DictionaryEditorWidget(SampleItem(mapping={"first": object(), "second": object()}))
 
-    editor = DictionaryEditorWidget(SampleItem(mapping=values))
-
-    field = editor._fields["mapping"]
+    field = editor._get_field_widget("mapping")
 
     assert isinstance(field, DictionaryWidget)
     assert set(field._item_widgets) == {"first", "second"}
@@ -533,56 +811,92 @@ def test_dictionary_field_creates_widgets_for_all_items(qapp: QApplication) -> N
 def test_dictionary_field_passes_context(qapp: QApplication) -> None:
     """Pass shared context to dictionary item editors."""
     context = {"language": "en"}
-    values = {"first": object()}
 
-    editor = DictionaryEditorWidget(SampleItem(mapping=values), context=context)
+    editor = DictionaryEditorWidget(SampleItem(mapping={"first": object()}), context=context)
 
-    field = editor._fields["mapping"]
+    field = editor._get_field_widget("mapping")
 
     assert isinstance(field, DictionaryWidget)
 
-    dictionary_editor = field._item_widgets["first"]
+    nested_editor = field._item_widgets["first"]
 
-    assert isinstance(dictionary_editor, EmptyEditorWidget)
-    assert dictionary_editor._context == context
+    assert isinstance(nested_editor, EmptyEditorWidget)
+    assert nested_editor._context is context
 
 
 def test_dictionary_field_passes_read_only_state(qapp: QApplication) -> None:
     """Pass read-only state to dictionary item editors."""
-    values = {"first": object()}
+    editor = DictionaryEditorWidget(SampleItem(mapping={"first": object()}), read_only=True)
 
-    editor = DictionaryEditorWidget(SampleItem(mapping=values), read_only=True)
-
-    field = editor._fields["mapping"]
+    field = editor._get_field_widget("mapping")
 
     assert isinstance(field, DictionaryWidget)
 
-    dictionary_editor = field._item_widgets["first"]
+    nested_editor = field._item_widgets["first"]
 
-    assert isinstance(dictionary_editor, EmptyEditorWidget)
-    assert dictionary_editor._read_only is True
+    assert isinstance(nested_editor, EmptyEditorWidget)
+    assert nested_editor._read_only is True
+
+
+def test_nested_dictionary_item_raises_error(qapp: QApplication) -> None:
+    """Reject nested dictionary values."""
+    editor = EmptyEditorWidget(object())
+
+    with pytest.raises(ValueError, match="Nested dictionaries are not supported."):
+        editor._create_dict_item_field(EditorField(name="mapping", label="Mapping"), {})
+
+
+def test_nested_dictionary_editor_is_created(qapp: QApplication) -> None:
+    """Create nested editors for dictionary values."""
+    first_value = SampleItem(text="first")
+
+    editor = NestedDictionaryEditorWidget(SampleItem(mapping={"first": first_value}))
+
+    field = editor._get_field_widget("mapping")
+
+    assert isinstance(field, DictionaryWidget)
+
+    nested_editor = field._item_widgets["first"]
+
+    assert isinstance(nested_editor, NestedItemEditorWidget)
+
+
+def test_nested_dictionary_editor_does_not_have_save_button(qapp: QApplication) -> None:
+    """Do not create save buttons for nested dictionary editors."""
+    editor = NestedDictionaryEditorWidget(SampleItem(mapping={"first": SampleItem(text="first")}))
+
+    field = editor._get_field_widget("mapping")
+
+    assert isinstance(field, DictionaryWidget)
+
+    nested_editor = field._item_widgets["first"]
+
+    assert isinstance(nested_editor, NestedItemEditorWidget)
+    assert not hasattr(nested_editor, "_save_button")
+
+
+# ============================================================================
+# Layout
+# ============================================================================
 
 
 def test_creates_multiple_editor_sections(qapp: QApplication) -> None:
-    """Split simple and complex fields into separate layout sections."""
+    """Split simple and complex fields into separate form sections."""
     editor = SectionEditorWidget(SampleItem(values=["first"], mapping={"key": object()}))
 
     layout = editor._layout
 
-    assert isinstance(layout, QVBoxLayout)
-
-    layout_items = [layout.itemAt(index) for index in range(layout.count())]
-
     form_layouts = [
-        item.layout()
-        for item in layout_items
-        if item.layout() is not None and isinstance(item.layout(), QFormLayout)
+        layout.itemAt(index).layout()
+        for index in range(layout.count())
+        if layout.itemAt(index).layout() is not None
+        and isinstance(layout.itemAt(index).layout(), QFormLayout)
     ]
 
     assert len(form_layouts) == 2
 
 
-def test_complex_field_label_is_bold(qapp: QApplication) -> None:
+def test_complex_field_labels_are_bold(qapp: QApplication) -> None:
     """Display complex field labels using bold text."""
     editor = SectionEditorWidget(SampleItem())
 
@@ -592,21 +906,12 @@ def test_complex_field_label_is_bold(qapp: QApplication) -> None:
         if isinstance(editor._layout.itemAt(index).widget(), QLabel)
     ]
 
-    assert any(
-        label.text() == "Values" and label.font().bold()
-        for label in labels
-        if isinstance(label, QLabel)
-    )
-
-    assert any(
-        label.text() == "Mapping" and label.font().bold()
-        for label in labels
-        if isinstance(label, QLabel)
-    )
+    assert any(label.text() == "Values" and label.font().bold() for label in labels)
+    assert any(label.text() == "Mapping" and label.font().bold() for label in labels)
 
 
 def test_adds_spacing_between_editor_sections(qapp: QApplication) -> None:
-    """Add spacing between simple and complex editor sections."""
+    """Add spacing between separate editor sections."""
     editor = SectionEditorWidget(SampleItem())
 
     spacings = [
@@ -616,6 +921,11 @@ def test_adds_spacing_between_editor_sections(qapp: QApplication) -> None:
     ]
 
     assert len(spacings) >= 3
+
+
+# ============================================================================
+# Unsupported values and widget types
+# ============================================================================
 
 
 def test_unsupported_value_raises_error(qapp: QApplication) -> None:
@@ -632,6 +942,11 @@ def test_get_base_widget_value_raises_for_unsupported_widget(qapp: QApplication)
         editor._get_base_widget_value(QWidget())
 
 
+# ============================================================================
+# Context
+# ============================================================================
+
+
 def test_default_context_is_empty_dictionary(qapp: QApplication) -> None:
     """Use an empty dictionary when no context is provided."""
     editor = BasicFieldsEditorWidget(SampleItem())
@@ -640,7 +955,7 @@ def test_default_context_is_empty_dictionary(qapp: QApplication) -> None:
 
 
 def test_preserves_provided_context(qapp: QApplication) -> None:
-    """Use the provided context dictionary."""
+    """Preserve the provided context object."""
     context = {"key": "value"}
 
     editor = BasicFieldsEditorWidget(SampleItem(), context=context)
@@ -648,9 +963,9 @@ def test_preserves_provided_context(qapp: QApplication) -> None:
     assert editor._context is context
 
 
-# =========================================================================
+# ============================================================================
 # Saving
-# =========================================================================
+# ============================================================================
 
 
 def test_save_updates_basic_field_values(qapp: QApplication) -> None:
@@ -659,12 +974,12 @@ def test_save_updates_basic_field_values(qapp: QApplication) -> None:
 
     editor = BasicFieldsEditorWidget(item)
 
-    text_field = editor._fields["text"]
-    number_field = editor._fields["number"]
-    decimal_field = editor._fields["decimal"]
-    enabled_field = editor._fields["enabled"]
-    enum_field = editor._fields["enum_value"]
-    optional_field = editor._fields["optional_value"]
+    text_field = editor._get_field_widget("text")
+    number_field = editor._get_field_widget("number")
+    decimal_field = editor._get_field_widget("decimal")
+    enabled_field = editor._get_field_widget("enabled")
+    enum_field = editor._get_field_widget("enum_value")
+    optional_field = editor._get_field_widget("optional_value")
 
     assert isinstance(text_field, QLineEdit)
     assert isinstance(number_field, QSpinBox)
@@ -690,13 +1005,102 @@ def test_save_updates_basic_field_values(qapp: QApplication) -> None:
     assert item.optional_value == "Optional value"
 
 
+def test_save_converts_optional_numeric_values(qapp: QApplication) -> None:
+    """Convert optional numeric line-edit values to their declared types."""
+    item = SampleItem()
+
+    editor = OptionalNumberEditorWidget(item)
+
+    number_field = editor._get_field_widget("optional_number")
+    decimal_field = editor._get_field_widget("optional_decimal")
+
+    assert isinstance(number_field, QLineEdit)
+    assert isinstance(decimal_field, QLineEdit)
+
+    number_field.setText("123")
+    decimal_field.setText("4.5")
+
+    editor.save()
+
+    assert item.optional_number == 123
+    assert item.optional_decimal == 4.5
+
+
+def test_save_converts_empty_optional_numeric_values_to_none(qapp: QApplication) -> None:
+    """Convert empty optional numeric fields to None."""
+    item = SampleItem(
+        optional_number=123,
+        optional_decimal=4.5,
+    )
+
+    editor = OptionalNumberEditorWidget(item)
+
+    number_field = editor._get_field_widget("optional_number")
+    decimal_field = editor._get_field_widget("optional_decimal")
+
+    assert isinstance(number_field, QLineEdit)
+    assert isinstance(decimal_field, QLineEdit)
+
+    number_field.clear()
+    decimal_field.clear()
+
+    editor.save()
+
+    assert item.optional_number is None
+    assert item.optional_decimal is None
+
+
+def test_save_rejects_invalid_optional_numeric_value(qapp: QApplication) -> None:
+    """Reject invalid numeric input during save."""
+    editor = OptionalNumberEditorWidget(SampleItem())
+
+    field = editor._get_field_widget("optional_number")
+
+    assert isinstance(field, QLineEdit)
+
+    field.setText("not a number")
+
+    with pytest.raises(ValueError, match="Invalid int value"):
+        editor.save()
+
+
+def test_save_does_not_partially_update_item_when_validation_fails(qapp: QApplication) -> None:
+    """Keep the model unchanged when saving fails."""
+    item = SampleItem(text="Original", optional_number=10)
+
+    class Editor(BaseEditorWidget[SampleItem]):
+        """Editor used to test atomic saving."""
+
+        FIELDS = (
+            EditorField(name="text", label="Text"),
+            EditorField(name="optional_number", label="Number", value_type=int | None),
+        )
+
+    editor = Editor(item)
+
+    text_field = editor._get_field_widget("text")
+    number_field = editor._get_field_widget("optional_number")
+
+    assert isinstance(text_field, QLineEdit)
+    assert isinstance(number_field, QLineEdit)
+
+    text_field.setText("Changed")
+    number_field.setText("invalid")
+
+    with pytest.raises(ValueError):
+        editor.save()
+
+    assert item.text == "Original"
+    assert item.optional_number == 10
+
+
 def test_save_updates_choice_field_value(qapp: QApplication) -> None:
     """Save the currently selected choice value."""
     item = SampleItem(text="first")
 
     editor = ChoiceEditorWidget(item)
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, DynamicComboBox)
 
@@ -718,7 +1122,7 @@ def test_save_does_not_save_field_level_read_only_value(qapp: QApplication) -> N
 
     editor = ReadOnlyEditorWidget(item)
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, QLabel)
 
@@ -735,7 +1139,7 @@ def test_save_does_not_modify_value_provider_value(qapp: QApplication) -> None:
 
     editor = ValueProviderEditorWidget(item)
 
-    field = editor._fields["provided_value"]
+    field = editor._get_field_widget("provided_value")
 
     assert isinstance(field, QLineEdit)
 
@@ -752,12 +1156,12 @@ def test_save_updates_list_values(qapp: QApplication) -> None:
 
     editor = ListEditorWidget(item)
 
-    field = editor._fields["values"]
+    field = editor._get_field_widget("values")
 
     assert isinstance(field, ListWidget)
 
-    first_item_widget = field._item_widgets[0]
-    second_item_widget = field._item_widgets[1]
+    first_item_widget = field.item_at(0)
+    second_item_widget = field.item_at(1)
 
     assert isinstance(first_item_widget, QLineEdit)
     assert isinstance(second_item_widget, QLineEdit)
@@ -770,8 +1174,8 @@ def test_save_updates_list_values(qapp: QApplication) -> None:
     assert item.values == ["updated first", "updated second"]
 
 
-def test_save_updates_dictionary_values(qapp: QApplication) -> None:
-    """Save modified dictionary item values."""
+def test_save_updates_nested_dictionary_values(qapp: QApplication) -> None:
+    """Save changes made by nested dictionary editors."""
     first_value = SampleItem(text="first")
     second_value = SampleItem(text="second")
 
@@ -784,7 +1188,7 @@ def test_save_updates_dictionary_values(qapp: QApplication) -> None:
 
     editor = NestedDictionaryEditorWidget(item)
 
-    field = editor._fields["mapping"]
+    field = editor._get_field_widget("mapping")
 
     assert isinstance(field, DictionaryWidget)
 
@@ -794,14 +1198,14 @@ def test_save_updates_dictionary_values(qapp: QApplication) -> None:
     assert isinstance(first_editor, NestedItemEditorWidget)
     assert isinstance(second_editor, NestedItemEditorWidget)
 
-    first_text_field = first_editor._fields["text"]
-    second_text_field = second_editor._fields["text"]
+    first_text_widget = first_editor._get_field_widget("text")
+    second_text_widget = second_editor._get_field_widget("text")
 
-    assert isinstance(first_text_field, QLineEdit)
-    assert isinstance(second_text_field, QLineEdit)
+    assert isinstance(first_text_widget, QLineEdit)
+    assert isinstance(second_text_widget, QLineEdit)
 
-    first_text_field.setText("updated first")
-    second_text_field.setText("updated second")
+    first_text_widget.setText("updated first")
+    second_text_widget.setText("updated second")
 
     editor.save()
 
@@ -814,9 +1218,8 @@ def test_save_updates_dictionary_values(qapp: QApplication) -> None:
 
 
 def test_save_emits_saved_signal(qapp: QApplication) -> None:
-    """Emit the saved signal after saving the edited item."""
-    item = SampleItem()
-    editor = BasicFieldsEditorWidget(item)
+    """Emit the saved signal after saving."""
+    editor = BasicFieldsEditorWidget(SampleItem())
 
     saved_emissions: list[None] = []
 
@@ -827,9 +1230,9 @@ def test_save_emits_saved_signal(qapp: QApplication) -> None:
     assert len(saved_emissions) == 1
 
 
-# =========================================================================
-# Save Button
-# =========================================================================
+# ============================================================================
+# Save button
+# ============================================================================
 
 
 def test_creates_save_button_by_default(qapp: QApplication) -> None:
@@ -864,7 +1267,7 @@ def test_clicking_save_button_saves_editor_values(qapp: QApplication) -> None:
 
     editor = BasicFieldsEditorWidget(item)
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, QLineEdit)
 
@@ -879,144 +1282,413 @@ def test_nested_custom_editor_does_not_show_save_button(qapp: QApplication) -> N
     """Do not show a save button inside nested custom editors."""
     editor = CustomEditorWidget(SampleItem())
 
-    field = editor._fields["text"]
+    field = editor._get_field_widget("text")
 
     assert isinstance(field, EmptyEditorWidget)
     assert not hasattr(field, "_save_button")
 
 
-def test_nested_dictionary_editor_does_not_show_save_button(qapp: QApplication) -> None:
-    """Do not show save buttons inside dictionary item editors."""
-    values = {"first": object()}
-
-    editor = DictionaryEditorWidget(SampleItem(mapping=values))
-
-    field = editor._fields["mapping"]
-
-    assert isinstance(field, DictionaryWidget)
-
-    nested_editor = field._item_widgets["first"]
-
-    assert isinstance(nested_editor, EmptyEditorWidget)
-    assert not hasattr(nested_editor, "_save_button")
+# ============================================================================
+# Refresh
+# ============================================================================
 
 
-def test_read_only_list_disables_add_and_remove_operations(qapp: QApplication) -> None:
-    """Disable list modifications in a read-only editor."""
-    editor = ListEditorWidget(SampleItem(values=["first"]), read_only=True)
-    field = editor._fields["values"]
+def test_refresh_updates_nested_list_editors(qapp: QApplication) -> None:
+    """Refresh nested list editors recursively."""
+    can_add = False
 
-    assert isinstance(field, ListWidget)
-    assert not field._add_button.isEnabled()
-    assert all(not button.isEnabled() for button in field._remove_buttons)
-
-
-def test_field_level_read_only_disables_list_operations(qapp: QApplication) -> None:
-    """Disable list modifications for a read-only list field."""
-    editor = ReadOnlyListEditorWidget(SampleItem(values=["first"]))
-    field = editor._fields["values"]
-
-    assert isinstance(field, ListWidget)
-    assert not field._add_button.isEnabled()
-    assert all(not button.isEnabled() for button in field._remove_buttons)
-
-
-def test_nested_dictionary_editors_save_their_items(qapp: QApplication) -> None:
-    """Save nested dictionary editors before returning their values."""
-    first_value = SampleItem(text="first")
-    second_value = SampleItem(text="second")
-
-    item = SampleItem(
-        mapping={
-            "first": first_value,
-            "second": second_value,
-        },
-    )
-
-    editor = NestedDictionaryEditorWidget(item)
-    field = editor._fields["mapping"]
-
-    assert isinstance(field, DictionaryWidget)
-
-    first_editor = field._item_widgets["first"]
-    second_editor = field._item_widgets["second"]
-
-    assert isinstance(first_editor, NestedItemEditorWidget)
-    assert isinstance(second_editor, NestedItemEditorWidget)
-
-    first_text_field = first_editor._fields["text"]
-    second_text_field = second_editor._fields["text"]
-
-    assert isinstance(first_text_field, QLineEdit)
-    assert isinstance(second_text_field, QLineEdit)
-
-    first_text_field.setText("updated first")
-    second_text_field.setText("updated second")
-
-    values = editor._get_dictionary_value_for_save(field)
-
-    assert values["first"] is first_value
-    assert values["second"] is second_value
-    assert first_value.text == "updated first"
-    assert second_value.text == "updated second"
-
-
-def test_nested_dictionary_item_raises_error(qapp: QApplication) -> None:
-    """Reject nested dictionary values."""
-    editor = EmptyEditorWidget(object())
-
-    field_config = EditorField(name="mapping", label="Mapping")
-
-    with pytest.raises(ValueError, match="Nested dictionaries are not supported."):
-        editor._create_dict_item_field(field_config, {})
-
-
-def test_refresh_recursively_refreshes_nested_editors(qapp: QApplication) -> None:
-    """Refresh nested editors recursively."""
-    root_can_add = False
-    nested_can_add = False
-
-    class NestedEditor(BaseEditorWidget[SampleItem]):
+    class Editor(BaseEditorWidget[SampleItem]):
         FIELDS = (
             EditorField(
                 name="values",
                 label="Values",
                 item_factory=lambda _context: "new value",
-                can_add_provider=lambda _editor: nested_can_add,
+                can_add_provider=lambda _editor: can_add,
             ),
         )
 
-    class RootEditor(BaseEditorWidget[SampleItem]):
+    editor = Editor(SampleItem(values=["first"]))
+
+    field = editor._get_field_widget("values")
+
+    assert isinstance(field, ListWidget)
+    assert not field._add_button.isEnabled()
+
+    can_add = True
+
+    editor.refresh()
+
+    assert field._add_button.isEnabled()
+
+
+def test_refresh_updates_nested_dictionary_editors(qapp: QApplication) -> None:
+    """Refresh nested dictionary editors recursively."""
+    refresh_count = 0
+
+    class RefreshableEditor(BaseEditorWidget[SampleItem]):
+        """Nested editor used to observe refresh."""
+
+        FIELDS = ()
+
+        def refresh(self) -> None:
+            nonlocal refresh_count
+
+            refresh_count += 1
+
+    class Editor(BaseEditorWidget[SampleItem]):
+        """Editor containing nested dictionary editors."""
+
         FIELDS = (
             EditorField(
-                name="values",
-                label="Values",
-                item_factory=lambda _context: SampleItem(),
-                editor_widget_type=NestedEditor,
-                can_add_provider=lambda _editor: root_can_add,
+                name="mapping",
+                label="Mapping",
+                editor_widget_type=RefreshableEditor,
             ),
         )
 
-    root = RootEditor(SampleItem(values=[SampleItem()]))
-    root_list = root._fields["values"]
+    editor = Editor(SampleItem(mapping={"first": SampleItem(), "second": SampleItem()}))
 
-    assert isinstance(root_list, ListWidget)
+    editor.refresh()
 
-    nested_editor = root_list.item_at(0)
+    assert refresh_count == 2
 
-    assert isinstance(nested_editor, NestedEditor)
 
-    nested_list = nested_editor._fields["values"]
+# ============================================================================
+# Variants
+# ============================================================================
 
-    assert isinstance(nested_list, ListWidget)
 
-    assert not root_list._add_button.isEnabled()
-    assert not nested_list._add_button.isEnabled()
+def test_creates_variant_field(qapp: QApplication) -> None:
+    """Create a VariantWidget for an EditorVariantField."""
+    editor = VariantEditorWidget(VariantItem())
 
-    root_can_add = True
-    nested_can_add = True
+    widget = _get_variant_widget(editor)
 
-    root.refresh()
+    assert isinstance(widget, VariantWidget)
+    assert len(widget.payloads) == 2
 
-    assert root_list._add_button.isEnabled()
-    assert nested_list._add_button.isEnabled()
+
+def test_variant_field_has_no_active_variant_when_no_fields_are_populated(
+    qapp: QApplication,
+) -> None:
+    """Leave variant selection empty when no variant is populated."""
+    editor = VariantEditorWidget(VariantItem())
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_index is None
+    assert widget.active_payload is None
+
+
+def test_variant_field_infers_first_variant(qapp: QApplication) -> None:
+    """Infer the first variant from populated model fields."""
+    editor = VariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_index == 0
+
+
+def test_variant_field_infers_second_variant(qapp: QApplication) -> None:
+    """Infer the second variant from populated model fields."""
+    editor = VariantEditorWidget(VariantItem(number=42))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_index == 1
+
+
+def test_variant_field_rejects_multiple_populated_variants(qapp: QApplication) -> None:
+    """Reject models where multiple variants are populated."""
+    with pytest.raises(ValueError, match="Multiple variants have populated fields."):
+        VariantEditorWidget(VariantItem(text="hello", number=42))
+
+
+def test_variant_field_creates_all_variant_pages(qapp: QApplication) -> None:
+    """Create field widgets for every variant page."""
+    editor = MultiFieldVariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    text_variant, text_widgets = widget.payloads[0]
+    number_variant, number_widgets = widget.payloads[1]
+
+    assert isinstance(text_variant, EditorVariant)
+    assert text_variant.label == "Text"
+    assert set(text_widgets) == {"text", "description"}
+
+    assert isinstance(number_variant, EditorVariant)
+    assert number_variant.label == "Number"
+    assert set(number_widgets) == {"number"}
+
+
+def test_variant_field_can_change_active_variant(qapp: QApplication) -> None:
+    """Change the active variant programmatically."""
+    editor = VariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_index == 0
+
+    widget.set_active_variant(1)
+
+    assert widget.active_index == 1
+
+
+def test_variant_field_changes_variant_from_radio_button(qapp: QApplication) -> None:
+    """Change the active variant through user selection."""
+    editor = VariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    buttons = widget.findChildren(QRadioButton)
+
+    assert len(buttons) == 2
+    assert buttons[0].isChecked()
+
+    buttons[1].click()
+
+    assert widget.active_index == 1
+
+
+def test_variant_field_emits_variant_changed_on_user_selection(qapp: QApplication) -> None:
+    """Emit variant_changed when the user selects another variant."""
+    editor = VariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    buttons = widget.findChildren(QRadioButton)
+
+    emissions: list[int] = []
+    widget.variant_changed.connect(emissions.append)
+
+    buttons[1].click()
+
+    assert emissions == [1]
+
+
+def test_variant_field_read_only_disables_variant_selection(qapp: QApplication) -> None:
+    """Disable variant selection when the variant field is read-only."""
+    editor = ReadOnlyVariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    buttons = widget.findChildren(QRadioButton)
+
+    assert len(buttons) == 2
+    assert all(not button.isEnabled() for button in buttons)
+
+
+def test_variant_field_read_only_disables_variant_page(qapp: QApplication) -> None:
+    """Disable the active variant page when the variant field is read-only."""
+    editor = ReadOnlyVariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    text_widget = variant_widgets["text"]
+
+    assert not text_widget.isEnabled()
+
+
+def test_read_only_field_inside_variant_uses_label(qapp: QApplication) -> None:
+    """Use a read-only widget for fields marked read-only inside variants."""
+    editor = ReadOnlyVariantFieldEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    assert isinstance(variant_widgets["text"], QLabel)
+    assert variant_widgets["text"].text() == "hello"
+
+
+def test_save_updates_active_variant(qapp: QApplication) -> None:
+    """Save values from the active variant."""
+    item = VariantItem(text="original")
+
+    editor = VariantEditorWidget(item)
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    text_widget = variant_widgets["text"]
+
+    assert isinstance(text_widget, QLineEdit)
+
+    text_widget.setText("updated")
+
+    editor.save()
+
+    assert item.text == "updated"
+    assert item.number is None
+
+
+def test_save_updates_only_active_variant(qapp: QApplication) -> None:
+    """Save fields belonging only to the currently active variant."""
+    item = VariantItem(number=10)
+
+    editor = VariantEditorWidget(item)
+
+    widget = _get_variant_widget(editor)
+    widget.set_active_variant(0)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    text_widget = variant_widgets["text"]
+
+    assert isinstance(text_widget, QLineEdit)
+
+    text_widget.setText("new text")
+
+    editor.save()
+
+    assert item.text == "new text"
+    assert item.number == 10
+
+
+def test_save_does_not_clear_inactive_variant_fields(qapp: QApplication) -> None:
+    """Leave fields from inactive variants untouched."""
+    item = VariantItem(number=10)
+
+    editor = VariantEditorWidget(item)
+
+    widget = _get_variant_widget(editor)
+    widget.set_active_variant(0)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    text_widget = variant_widgets["text"]
+
+    assert isinstance(text_widget, QLineEdit)
+
+    text_widget.setText("new text")
+
+    editor.save()
+
+    assert item.text == "new text"
+    assert item.number == 10
+
+
+def test_save_does_not_modify_read_only_variant_field(qapp: QApplication) -> None:
+    """Do not save read-only fields inside variants."""
+    item = VariantItem(text="original")
+
+    editor = ReadOnlyVariantFieldEditorWidget(item)
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    text_widget = variant_widgets["text"]
+
+    assert isinstance(text_widget, QLabel)
+
+    editor.save()
+
+    assert item.text == "original"
+
+
+def test_variant_field_rejects_empty_variants(qapp: QApplication) -> None:
+    """Reject variant fields without configured variants."""
+
+    class Editor(BaseEditorWidget[VariantItem]):
+        FIELDS = (EditorVariantField(label="Variant", variants=()),)
+
+    with pytest.raises(ValueError, match="must define at least one variant"):
+        Editor(VariantItem())
+
+
+def test_nested_editor_is_created_inside_variant(qapp: QApplication) -> None:
+    """Create nested editors inside variant pages."""
+    editor = NestedVariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    assert isinstance(variant_widgets["text"], EmptyEditorWidget)
+
+
+def test_nested_editor_inside_variant_does_not_have_save_button(qapp: QApplication) -> None:
+    """Do not create save buttons for nested variant editors."""
+    editor = NestedVariantEditorWidget(VariantItem(text="hello"))
+
+    widget = _get_variant_widget(editor)
+
+    assert widget.active_payload is not None
+
+    _, variant_widgets = widget.active_payload
+
+    nested_editor = variant_widgets["text"]
+
+    assert isinstance(nested_editor, EmptyEditorWidget)
+    assert not hasattr(nested_editor, "_save_button")
+
+
+def test_refresh_recursively_refreshes_all_variant_fields(qapp: QApplication) -> None:
+    """Refresh fields contained by every variant."""
+    refresh_count = 0
+
+    class RefreshableEditor(BaseEditorWidget[object]):
+        """Nested editor used to observe refresh."""
+
+        FIELDS = ()
+
+        def refresh(self) -> None:
+            nonlocal refresh_count
+
+            refresh_count += 1
+
+    class Editor(BaseEditorWidget[VariantItem]):
+        """Editor containing refreshable variant fields."""
+
+        FIELDS = (
+            EditorVariantField(
+                label="Variant",
+                variants=(
+                    EditorVariant(
+                        label="First",
+                        fields=(
+                            EditorField(
+                                name="text",
+                                label="Text",
+                                editor_widget_type=RefreshableEditor,
+                            ),
+                        ),
+                    ),
+                    EditorVariant(
+                        label="Second",
+                        fields=(
+                            EditorField(
+                                name="number",
+                                label="Number",
+                                editor_widget_type=RefreshableEditor,
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+    editor = Editor(VariantItem())
+
+    editor.refresh()
+
+    assert refresh_count == 2

@@ -31,7 +31,7 @@ class ContentReferenceFactory:
         """
         if qualified_id is None:
             cls._counter += 1
-            qualified_id = f"test.content_{cls._counter}"
+            qualified_id = f"test.test_mod.materials.content_{cls._counter}"
 
         return ContentReference(
             content_type=content_type,
