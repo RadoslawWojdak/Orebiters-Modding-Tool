@@ -21,11 +21,6 @@ class MaterialTableModel(ContentTableModel[Material]):
             getter=lambda material: material.localizations["en"].one,
         ),
         Column[Material](
-            header="Hint",
-            tooltip="Short description of the material",
-            getter=lambda material: material.localizations["en"].hint,
-        ),
-        Column[Material](
             header="Craftable",
             tooltip="Whether the material can be crafted",
             getter=lambda material: "✔️" if bool(material.crafting_materials) else "",

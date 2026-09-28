@@ -36,11 +36,12 @@ class MineableFactory:
             id = f"mineable_{cls._counter}"
 
         if localizations is None:
+            name = id.replace("_", " ").title()
             localizations = {
                 "en": ContentLocalization(
-                    one=id.replace("_", " ").title(),
-                    few=id.replace("_", " ").title(),
-                    many=id.replace("_", " ").title(),
+                    one=name,
+                    few=name,
+                    many=name,
                 ),
             }
 

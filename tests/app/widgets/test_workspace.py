@@ -5,11 +5,13 @@ import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox, QScrollArea
 
+from orebiters_modding_tool.app.editors import ItemEditorWidget
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.content.content_editor_widget import ContentEditorWidget
 from orebiters_modding_tool.app.editors.material.material_editor_widget import MaterialEditorWidget
 from orebiters_modding_tool.app.editors.mineable.mineable_editor_widget import MineableEditorWidget
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
+from orebiters_modding_tool.app.models import ItemTableModel
 from orebiters_modding_tool.app.models.content_factory import CONTENT_FACTORY_REGISTRY
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
@@ -24,9 +26,10 @@ from orebiters_modding_tool.domain.content import (
     ContentType,
 )
 from orebiters_modding_tool.domain.material import Material
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.material import MaterialFactory
-from tests.factories.mineable import MineableFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.item_factory import ItemFactory
+from tests.factories.material_factory import MaterialFactory
+from tests.factories.mineable_factory import MineableFactory
 
 
 def _get_editor_tab(
@@ -108,10 +111,7 @@ def test_open_content_creates_scrollable_editor_for_specific_content(
 
     workspace._tab_widget.setCurrentIndex(0)
     workspace.open_content(
-        ContentReferenceFactory.create(
-            content_type=ContentType.MATERIALS,
-            qualified_id=material.get_qualified_id(project.qualified_id),
-        ),
+        ContentReferenceFactory.create(material.get_qualified_id(project.qualified_id)),
     )
 
     editor_tab = workspace._tab_widget.currentWidget()
@@ -134,10 +134,7 @@ def test_open_content_activates_existing_editor_for_specific_content(
     project = workspace._project_service.active_project
     assert project is not None
     material = project.content[ContentType.MATERIALS][0]
-    reference = ContentReferenceFactory.create(
-        content_type=ContentType.MATERIALS,
-        qualified_id=material.get_qualified_id(project.qualified_id),
-    )
+    reference = ContentReferenceFactory.create(material.get_qualified_id(project.qualified_id))
     initial_tab_count = workspace._tab_widget.count()
 
     workspace._tab_widget.setCurrentIndex(0)
@@ -151,9 +148,9 @@ def test_open_content_activates_existing_editor_for_specific_content(
 
 def test_open_content_raises_for_missing_content(workspace: Workspace) -> None:
     """Raise an error when opening a reference to missing content."""
-    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.contents.missing")
+    reference = ContentReferenceFactory.create("test.test_mod.materials.missing")
 
-    with pytest.raises(ValueError, match="Content not found: test.test_mod.contents.missing."):
+    with pytest.raises(ValueError, match="Content not found: test.test_mod.materials.missing."):
         workspace.open_content(reference)
 
 
@@ -168,6 +165,7 @@ def test_open_content_raises_without_active_project(workspace: Workspace) -> Non
 @pytest.mark.parametrize(
     ("content_type", "expected_model_type"),
     [
+        (ContentType.ITEMS, ItemTableModel),
         (ContentType.MATERIALS, MaterialTableModel),
         (ContentType.MINEABLES, MineableTableModel),
     ],
@@ -540,6 +538,7 @@ def test_create_content_item_raises_for_unsupported_content_type() -> None:
 @pytest.mark.parametrize(
     ("content_type", "item_factory", "expected_editor_type"),
     [
+        (ContentType.ITEMS, ItemFactory.create, ItemEditorWidget),
         (ContentType.MATERIALS, MaterialFactory.create, MaterialEditorWidget),
         (ContentType.MINEABLES, MineableFactory.create, MineableEditorWidget),
     ],
@@ -563,6 +562,7 @@ def test_create_content_editor_creates_expected_editor(
 @pytest.mark.parametrize(
     ("content_type", "item_factory", "expected_type_name"),
     [
+        (ContentType.ITEMS, MaterialFactory.create, "Item"),
         (ContentType.MATERIALS, MineableFactory.create, "Material"),
         (ContentType.MINEABLES, MaterialFactory.create, "Mineable"),
     ],
@@ -576,7 +576,7 @@ def test_create_content_editor_raises_for_invalid_item(
     """Raise an error when the item does not match the content type."""
     reference = ContentReferenceFactory.create(content_type=content_type)
 
-    with pytest.raises(TypeError, match=f"Expected a {expected_type_name}."):
+    with pytest.raises(TypeError, match=f"Expected an? {expected_type_name}."):
         workspace._create_content_editor(reference, item_factory())
 
 
@@ -599,6 +599,7 @@ def test_create_content_editor_raises_for_unsupported_content_type(workspace: Wo
 @pytest.mark.parametrize(
     ("create_context", "provider_key"),
     [
+        ("_create_item_editor_context", "material_references_provider"),
         ("_create_material_editor_context", "material_references_provider"),
         ("_create_mineable_editor_context", "item_references_provider"),
     ],
@@ -621,6 +622,7 @@ def test_create_editor_context_contains_project_information(
 @pytest.mark.parametrize(
     "create_context",
     [
+        "_create_item_editor_context",
         "_create_material_editor_context",
         "_create_mineable_editor_context",
     ],
@@ -874,9 +876,6 @@ def test_get_tab_name_returns_content_type_for_category_reference(
 
 def test_get_tab_name_returns_content_type_and_content_id() -> None:
     """Return the content type name and content ID for a content reference."""
-    reference = ContentReferenceFactory.create(
-        content_type=ContentType.MATERIALS,
-        qualified_id="orebiters.core.materials.iron",
-    )
+    reference = ContentReferenceFactory.create("orebiters.core.materials.iron")
 
     assert Workspace._get_tab_name(reference) == "Materials iron"

@@ -20,11 +20,11 @@ class MaterialRepository(ContentRepository[Material]):
         """
         return {
             "id": material.get_qualified_id(project.qualified_id),
-            "icon_tag": f"materials:{material.id}",
             "crafting_materials": {
                 requirement.material_reference.qualified_id: requirement.amount
                 for requirement in material.crafting_materials
             },
+            "icon_tag": f"materials:{material.id}",
         }
 
     def _deserialize(self, data: dict[str, Any]) -> Material:

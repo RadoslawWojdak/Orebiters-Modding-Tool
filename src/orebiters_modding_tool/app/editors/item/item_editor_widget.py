@@ -7,18 +7,18 @@ from orebiters_modding_tool.app.editors.crafting.material_requirement_editor_wid
     MaterialRequirementEditorWidget,
 )
 from orebiters_modding_tool.app.editors.editor_field import EditorField, EditorVariantField
-from orebiters_modding_tool.app.editors.material.material_localization_editor_widget import (
-    MaterialLocalizationEditorWidget,
+from orebiters_modding_tool.app.editors.item.item_localization_editor_widget import (
+    ItemLocalizationEditorWidget,
 )
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
-from orebiters_modding_tool.domain.material import Material
+from orebiters_modding_tool.domain.item import Item
 
 
-class MaterialEditorWidget(ContentEditorWidget[Material]):
-    """Editor for a material."""
+class ItemEditorWidget(ContentEditorWidget[Item]):
+    """Editor for an item."""
 
-    CONTENT_TYPE = ContentType.MATERIALS
+    CONTENT_TYPE = ContentType.ITEMS
 
     def _can_add_material_requirement(self) -> bool:
         """Return whether another material requirement can be added.
@@ -38,7 +38,17 @@ class MaterialEditorWidget(ContentEditorWidget[Material]):
         EditorField(
             name="localizations",
             label="Localizations",
-            editor_widget_type=MaterialLocalizationEditorWidget,
+            editor_widget_type=ItemLocalizationEditorWidget,
+        ),
+        EditorField(
+            name="max_stack_size",
+            label="Maximum Stack Size",
+            value_type=int | None,
+        ),
+        EditorField(
+            name="base_price",
+            label="Base Price",
+            value_type=int | None,
         ),
         EditorField(
             name="crafting_materials",
@@ -51,16 +61,16 @@ class MaterialEditorWidget(ContentEditorWidget[Material]):
 
     def __init__(
         self,
-        item: Material,
+        item: Item,
         context: dict[str, object] | None = None,
         parent: QWidget | None = None,
         *,
         read_only: bool = False,
         show_save_button: bool = True,
     ) -> None:
-        """Initialize the material editor.
+        """Initialize the item editor.
 
-        :param item: Material to edit.
+        :param item: Item to edit.
         :param context: Additional context required by the editor.
         :param parent: Parent widget.
         :param read_only: Whether the editor is read-only.
@@ -86,20 +96,10 @@ class MaterialEditorWidget(ContentEditorWidget[Material]):
         :param current_material: Reference selected by the current requirement.
         :returns: Material references excluded from the available choices.
         """
-        excluded_references = {
-            self._get_material_reference(),
-            *self._get_used_material_references(),
-        }
+        excluded_references = set(self._get_used_material_references())
         excluded_references.discard(current_material)
 
         return tuple(excluded_references)
-
-    def _get_material_reference(self) -> ContentReference:
-        """Return a reference to the edited material."""
-        return ContentReference(
-            content_type=Material.CONTENT_TYPE,
-            qualified_id=self._get_qualified_id(),
-        )
 
     def _get_used_material_references(self) -> Sequence[ContentReference]:
         """Return material references currently used in crafting materials."""

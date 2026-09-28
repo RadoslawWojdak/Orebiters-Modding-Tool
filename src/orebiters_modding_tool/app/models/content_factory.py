@@ -8,6 +8,7 @@ from orebiters_modding_tool.domain.content import (
     ContentState,
     ContentType,
 )
+from orebiters_modding_tool.domain.item import Item, ItemLocalization
 from orebiters_modding_tool.domain.material import Material, MaterialLocalization
 from orebiters_modding_tool.domain.mineable import MineableType
 
@@ -15,6 +16,15 @@ ContentFactory = Callable[[str], Content[Any]]
 
 
 CONTENT_FACTORY_REGISTRY: dict[ContentType, ContentFactory] = {
+    ContentType.ITEMS: lambda content_id: Item(
+        id=content_id,
+        localizations={
+            "en": ItemLocalization(),
+            "pl": ItemLocalization(),
+        },
+        crafting_materials=[],
+        state=ContentState.NEW,
+    ),
     ContentType.MATERIALS: lambda content_id: Material(
         id=content_id,
         localizations={

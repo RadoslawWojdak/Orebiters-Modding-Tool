@@ -3,12 +3,12 @@ from PySide6.QtWidgets import QApplication
 from orebiters_modding_tool.app.editors.crafting.material_requirement_editor_widget import (
     MaterialRequirementEditorWidget,
 )
-from orebiters_modding_tool.app.editors.material.material_editor_widget import MaterialEditorWidget
+from orebiters_modding_tool.app.editors.item.item_editor_widget import ItemEditorWidget
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 from orebiters_modding_tool.domain.content import ContentReference
 from tests.factories.content_factory import ContentReferenceFactory
-from tests.factories.material_factory import MaterialFactory
+from tests.factories.item_factory import ItemFactory
 
 
 def _create_material_reference(material_id: str) -> ContentReference:
@@ -17,12 +17,12 @@ def _create_material_reference(material_id: str) -> ContentReference:
 
 
 def _create_editor(
-    material_id: str = "test_id",
+    item_id: str = "test_id",
     references: list[ContentReference] | None = None,
-) -> MaterialEditorWidget:
-    """Create a material editor with registered material references."""
-    return MaterialEditorWidget(
-        MaterialFactory.create(id=material_id),
+) -> ItemEditorWidget:
+    """Create an item editor with registered material references."""
+    return ItemEditorWidget(
+        ItemFactory.create(id=item_id),
         context={
             "mod_id": "orebiters.core",
             "material_references_provider": lambda: [] if references is None else references,
@@ -30,7 +30,7 @@ def _create_editor(
     )
 
 
-def _get_crafting_materials(editor: MaterialEditorWidget) -> ListWidget:
+def _get_crafting_materials(editor: ItemEditorWidget) -> ListWidget:
     """Return the crafting materials list."""
     widget = editor._get_field_widget("crafting_materials")
     assert isinstance(widget, ListWidget)
@@ -56,12 +56,12 @@ def _get_available_choices(field: DynamicComboBox) -> list[ContentReference]:
 # =========================================================================
 
 
-def test_crafting_requirements_exclude_the_edited_material(qapp: QApplication) -> None:
-    """Prevent a material from requiring itself."""
-    edited_reference = _create_material_reference("iron")
-    other_reference = _create_material_reference("copper")
+def test_crafting_requirements_allow_all_registered_materials(qapp: QApplication) -> None:
+    """Allow all registered materials when no requirements exist."""
+    iron = _create_material_reference("iron")
+    copper = _create_material_reference("copper")
 
-    editor = _create_editor("iron", references=[edited_reference, other_reference])
+    editor = _create_editor(references=[iron, copper])
     crafting_materials = _get_crafting_materials(editor)
 
     crafting_materials._add_button.click()
@@ -71,8 +71,7 @@ def test_crafting_requirements_exclude_the_edited_material(qapp: QApplication) -
 
     choices = _get_available_choices(_get_material_field(requirement_editor))
 
-    assert edited_reference not in choices
-    assert other_reference in choices
+    assert choices == [iron, copper]
 
 
 def test_crafting_requirements_exclude_materials_used_by_other_requirements(
@@ -83,7 +82,7 @@ def test_crafting_requirements_exclude_materials_used_by_other_requirements(
     copper = _create_material_reference("copper")
     gold = _create_material_reference("gold")
 
-    editor = _create_editor("iron", references=[iron, copper, gold])
+    editor = _create_editor(references=[iron, copper, gold])
     crafting_materials = _get_crafting_materials(editor)
 
     crafting_materials._add_button.click()
@@ -101,7 +100,7 @@ def test_crafting_requirements_exclude_materials_used_by_other_requirements(
 
     choices = _get_available_choices(_get_material_field(second_editor))
 
-    assert iron not in choices
+    assert iron in choices
     assert copper not in choices
     assert gold in choices
 
@@ -112,7 +111,7 @@ def test_currently_selected_material_remains_available(qapp: QApplication) -> No
     copper = _create_material_reference("copper")
     gold = _create_material_reference("gold")
 
-    editor = _create_editor("iron", references=[iron, copper, gold])
+    editor = _create_editor(references=[iron, copper, gold])
     crafting_materials = _get_crafting_materials(editor)
 
     crafting_materials._add_button.click()
@@ -126,8 +125,8 @@ def test_currently_selected_material_remains_available(qapp: QApplication) -> No
     choices = _get_available_choices(field)
 
     assert copper in choices
+    assert iron in choices
     assert gold in choices
-    assert iron not in choices
 
 
 def test_removing_requirement_makes_its_material_available_again(qapp: QApplication) -> None:
@@ -136,7 +135,7 @@ def test_removing_requirement_makes_its_material_available_again(qapp: QApplicat
     copper = _create_material_reference("copper")
     gold = _create_material_reference("gold")
 
-    editor = _create_editor("iron", references=[iron, copper, gold])
+    editor = _create_editor(references=[iron, copper, gold])
     crafting_materials = _get_crafting_materials(editor)
 
     crafting_materials._add_button.click()
@@ -163,8 +162,8 @@ def test_removing_requirement_makes_its_material_available_again(qapp: QApplicat
     choices = _get_available_choices(second_field)
 
     assert copper in choices
+    assert iron in choices
     assert gold in choices
-    assert iron not in choices
 
 
 def test_refresh_enables_adding_requirements_when_materials_become_available(

@@ -2,7 +2,7 @@ import pytest
 
 from orebiters_modding_tool.app.models.mineable_table_model import MineableTableModel
 from orebiters_modding_tool.domain.content import ContentType
-from tests.factories.mineable import MineableFactory
+from tests.factories.mineable_factory import MineableFactory
 
 
 def _get_column(header: str):
@@ -13,6 +13,25 @@ def _get_column(header: str):
 def test_content_type() -> None:
     """Use the mineables content type."""
     assert MineableTableModel.CONTENT_TYPE == ContentType.MINEABLES
+
+
+def test_row_count_returns_number_of_mineables() -> None:
+    """Test that row count matches the number of mineables."""
+    mineables = [MineableFactory.create() for _ in range(3)]
+
+    model = MineableTableModel(mineables)
+
+    assert model.rowCount() == 3
+
+
+def test_name_column_uses_english_localization() -> None:
+    """Display the English localization as the mineable name."""
+    mineable = MineableFactory.create()
+    mineable.localizations["en"].one = "Iron"
+
+    name_column = _get_column("Name")
+
+    assert name_column.getter(mineable) == "Iron"
 
 
 @pytest.mark.parametrize(
@@ -58,13 +77,3 @@ def test_depth_column_sorts_by_numeric_depth_range(
 
     assert depth_column.sorter is not None
     assert depth_column.sorter(mineable) == expected
-
-
-def test_name_column_uses_english_localization() -> None:
-    """Display the English localization as the mineable name."""
-    mineable = MineableFactory.create()
-    mineable.localizations["en"].one = "Iron Ore"
-
-    name_column = _get_column("Name")
-
-    assert name_column.getter(mineable) == "Iron Ore"

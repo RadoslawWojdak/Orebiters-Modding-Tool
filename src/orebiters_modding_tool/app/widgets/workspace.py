@@ -14,14 +14,13 @@ from orebiters_modding_tool.app.widgets.content_overview import (
     ContentOverviewWidget,
 )
 from orebiters_modding_tool.app.widgets.welcome_widget import WelcomeWidget
-from orebiters_modding_tool.domain import Mineable
+from orebiters_modding_tool.domain import Item, Material, Mineable
 from orebiters_modding_tool.domain.content import (
     Content,
     ContentReference,
     ContentState,
     ContentType,
 )
-from orebiters_modding_tool.domain.material import Material
 from orebiters_modding_tool.services.project_service import ProjectService
 
 
@@ -327,7 +326,11 @@ class Workspace(QWidget):
         except KeyError:
             raise ValueError(f"Unsupported content type: {content_type}.") from None
 
-        if content_type is ContentType.MATERIALS:
+        if content_type is ContentType.ITEMS:
+            if not isinstance(item, Item):
+                raise TypeError("Expected an Item.")
+            context = self._create_item_editor_context()
+        elif content_type is ContentType.MATERIALS:
             if not isinstance(item, Material):
                 raise TypeError("Expected a Material.")
             context = self._create_material_editor_context()
@@ -357,6 +360,23 @@ class Workspace(QWidget):
         scroll_area.setWidget(editor)
 
         return scroll_area
+
+    def _create_item_editor_context(self) -> dict[str, object]:
+        """Create context required by the item editor.
+
+        :returns: Item editor context.
+        """
+        active_project = self._project_service.active_project
+
+        if active_project is None:
+            raise RuntimeError("No active project.")
+
+        return {
+            "mod_id": active_project.qualified_id,
+            "material_references_provider": (
+                lambda: self._project_service.get_content_references(ContentType.MATERIALS)
+            ),
+        }
 
     def _create_material_editor_context(self) -> dict[str, object]:
         """Create context required by the material editor.

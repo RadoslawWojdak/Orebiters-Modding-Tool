@@ -10,7 +10,7 @@ from orebiters_modding_tool.app.widgets.content_overview import (
 )
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import Material
-from tests.factories.material import MaterialFactory
+from tests.factories.material_factory import MaterialFactory
 
 
 def create_materials() -> list[Material]:

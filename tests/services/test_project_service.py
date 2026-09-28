@@ -11,9 +11,9 @@ from orebiters_modding_tool.infrastructure.localization_repository import Locali
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
 from orebiters_modding_tool.services.project_service import ProjectService
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.material import MaterialFactory
-from tests.factories.material_requirement import MaterialRequirementFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.material_factory import MaterialFactory
+from tests.factories.material_requirement_factory import MaterialRequirementFactory
 
 
 def create_project_service(tmp_path: Path) -> ProjectService:

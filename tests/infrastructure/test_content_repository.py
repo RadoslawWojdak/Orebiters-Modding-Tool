@@ -8,8 +8,8 @@ from orebiters_modding_tool.domain.content import Content, ContentState, Content
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.content_repository import ContentRepository
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
-from tests.factories.content import ContentFactory
-from tests.factories.material import MaterialFactory
+from tests.factories.content_factory import ContentFactory
+from tests.factories.material_factory import MaterialFactory
 
 
 class ContentRepositorySample(ContentRepository[Content[Any]]):

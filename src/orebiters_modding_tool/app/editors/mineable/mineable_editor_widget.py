@@ -7,12 +7,12 @@ from orebiters_modding_tool.app.editors.content.content_editor_widget import Con
 from orebiters_modding_tool.app.editors.content.content_localization_editor_widget import (
     ContentLocalizationEditorWidget,
 )
+from orebiters_modding_tool.app.editors.drop.drop_editor_widget import DropEditorWidget
 from orebiters_modding_tool.app.editors.editor_field import (
     EditorField,
     EditorVariant,
     EditorVariantField,
 )
-from orebiters_modding_tool.app.editors.mineable.drop_editor_widget import DropEditorWidget
 from orebiters_modding_tool.app.widgets.dynamic_combo_box import DynamicComboBox
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
@@ -25,15 +25,6 @@ class MineableEditorWidget(ContentEditorWidget[Mineable]):
 
     CONTENT_TYPE = ContentType.MINEABLES
 
-    def _get_qualified_id(self) -> str:
-        """Return the qualified mineable ID."""
-        mod_id = self._context["mod_id"]
-
-        if not isinstance(mod_id, str):
-            raise TypeError("Context value 'mod_id' must be a string.")
-
-        return self._item.get_qualified_id(mod_id)
-
     @staticmethod
     def _create_drop(context: dict[str, object]) -> Drop:
         """Create a default drop.
@@ -41,13 +32,13 @@ class MineableEditorWidget(ContentEditorWidget[Mineable]):
         :param context: Editor context.
         :returns: New drop.
         """
-        item_references = MineableEditorWidget._get_registered_item_references(context)
+        references = MineableEditorWidget._get_registered_item_references(context)
 
         excluded_provider = context.get("excluded_item_references_provider")
         excluded_references = excluded_provider(None) if callable(excluded_provider) else ()
 
         available_references = tuple(
-            reference for reference in item_references if reference not in excluded_references
+            reference for reference in references if reference not in excluded_references
         )
 
         if not available_references:
@@ -67,7 +58,7 @@ class MineableEditorWidget(ContentEditorWidget[Mineable]):
             name="qualified_id",
             label="Qualified ID:",
             read_only=True,
-            value_provider=_get_qualified_id,
+            value_provider=ContentEditorWidget._get_qualified_id,
         ),
         EditorField(
             name="localizations",
@@ -243,6 +234,7 @@ class MineableEditorWidget(ContentEditorWidget[Mineable]):
 
         :param context: Editor context.
         :returns: Currently registered item references.
+        :raises TypeError: If the provider or its returned references are invalid.
         """
         provider = context.get("item_references_provider")
 

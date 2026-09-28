@@ -7,9 +7,9 @@ from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.mineable import MineableType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.mineable_repository import MineableRepository
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.drop import DropFactory
-from tests.factories.mineable import MineableFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.drop_factory import DropFactory
+from tests.factories.mineable_factory import MineableFactory
 
 
 @pytest.fixture
@@ -20,13 +20,10 @@ def repository(tmp_path: Path) -> MineableRepository:
 
 def test_save_and_load_mineable(repository: MineableRepository, project: Project) -> None:
     """Verify that a mineable can be saved and loaded."""
-    iron = ContentReferenceFactory.create(
-        content_type=ContentType.MATERIALS,
-        qualified_id=f"{project.qualified_id}.iron",
-    )
+    ferrite_dust = ContentReferenceFactory.create(f"{project.qualified_id}.materials.ferrite_dust")
 
     mineable = MineableFactory.create(
-        id="iron_ore",
+        id="iron",
         type=MineableType.RESOURCE,
         tier=2,
         value=25,
@@ -35,7 +32,7 @@ def test_save_and_load_mineable(repository: MineableRepository, project: Project
         min_depth=10,
         max_depth=100,
         peak_depth=50,
-        drops=[DropFactory.create(item=iron, probability=0.75)],
+        drops=[DropFactory.create(ferrite_dust, probability=0.75)],
         particle_colors=["#FF0000", "#00FF00"],
         damage_multiplier=1.5,
         player_only_destruction=True,
@@ -55,7 +52,7 @@ def test_save_and_load_mineable(repository: MineableRepository, project: Project
     assert loaded_mineable.min_depth == 10
     assert loaded_mineable.max_depth == 100
     assert loaded_mineable.peak_depth == 50
-    assert loaded_mineable.drops == [DropFactory.create(item=iron, probability=0.75)]
+    assert loaded_mineable.drops == [DropFactory.create(ferrite_dust, probability=0.75)]
     assert loaded_mineable.particle_colors == ["#FF0000", "#00FF00"]
     assert loaded_mineable.damage_multiplier == 1.5
     assert loaded_mineable.player_only_destruction is True
@@ -64,7 +61,7 @@ def test_save_and_load_mineable(repository: MineableRepository, project: Project
 @pytest.mark.parametrize(
     ("mineable_type", "expected_icon_tag"),
     [
-        (MineableType.RESOURCE, "mineables:iron_ore"),
+        (MineableType.RESOURCE, "mineables:iron"),
         (MineableType.ARTIFACT, "mineables:ancient_artifact"),
     ],
 )
@@ -97,13 +94,13 @@ def test_save_mineable_without_icon_tag_for_obstacle(
     project: Project,
 ) -> None:
     """Do not persist an icon tag for obstacles."""
-    repository.save(project, MineableFactory.create(id="spike", type=MineableType.OBSTACLE))
+    repository.save(project, MineableFactory.create(id="iron", type=MineableType.OBSTACLE))
 
     file_path = (
         repository._mods_directory
         / project.qualified_id
         / ContentType.MINEABLES.value
-        / "spike.json"
+        / "iron.json"
     )
 
     with file_path.open("r", encoding="utf-8") as file:
@@ -115,7 +112,7 @@ def test_save_mineable_without_icon_tag_for_obstacle(
 def test_serialize_mineable(project: Project, repository: MineableRepository) -> None:
     """Serialize a mineable into the expected JSON structure."""
     mineable = MineableFactory.create(
-        id="iron_ore",
+        id="iron",
         type=MineableType.RESOURCE,
         tier=2,
         value=25,
@@ -142,7 +139,7 @@ def test_serialize_mineable(project: Project, repository: MineableRepository) ->
         "peak_depth": 50,
         "drops": {},
         "particle_colors": ["#FF0000"],
-        "icon_tag": "mineables:iron_ore",
+        "icon_tag": "mineables:iron",
     }
 
 
@@ -151,17 +148,11 @@ def test_serialize_mineable_with_drops(project: Project, repository: MineableRep
     mineable = MineableFactory.create(
         drops=[
             DropFactory.create(
-                item=ContentReferenceFactory.create(
-                    content_type=ContentType.MATERIALS,
-                    qualified_id=f"{project.qualified_id}.iron",
-                ),
+                ContentReferenceFactory.create(f"{project.qualified_id}.materials.ferrite_dust"),
                 probability=0.75,
             ),
             DropFactory.create(
-                item=ContentReferenceFactory.create(
-                    content_type=ContentType.MATERIALS,
-                    qualified_id=f"{project.qualified_id}.coal",
-                ),
+                ContentReferenceFactory.create(f"{project.qualified_id}.materials.clay"),
                 probability=0.25,
             ),
         ],
@@ -170,8 +161,8 @@ def test_serialize_mineable_with_drops(project: Project, repository: MineableRep
     data = repository._serialize(project, mineable)
 
     assert data["drops"] == {
-        f"{project.qualified_id}.iron": 0.75,
-        f"{project.qualified_id}.coal": 0.25,
+        f"{project.qualified_id}.materials.ferrite_dust": 0.75,
+        f"{project.qualified_id}.materials.clay": 0.25,
     }
 
 
@@ -233,7 +224,7 @@ def test_deserialize_mineable(repository: MineableRepository) -> None:
     """Deserialize a mineable with no optional collections."""
     mineable = repository._deserialize(
         {
-            "id": "example.iron_ore",
+            "id": "orebiters.core.mineables.iron",
             "type": "resource",
             "hardness": 8,
             "min_drill_power": 4,
@@ -244,7 +235,7 @@ def test_deserialize_mineable(repository: MineableRepository) -> None:
         }
     )
 
-    assert mineable.id == "iron_ore"
+    assert mineable.id == "iron"
     assert mineable.localizations == {}
     assert mineable.type == MineableType.RESOURCE
     assert mineable.tier is None
@@ -267,7 +258,7 @@ def test_deserialize_mineable_without_optional_fields(repository: MineableReposi
     """Use defaults when optional fields are absent."""
     mineable = repository._deserialize(
         {
-            "id": "example.iron_ore",
+            "id": "orebiters.core.mineables.iron",
             "type": "resource",
             "hardness": 8,
             "min_drill_power": 4,
@@ -288,7 +279,7 @@ def test_deserialize_mineable_with_generation_fields(repository: MineableReposit
     """Deserialize generation fields."""
     mineable = repository._deserialize(
         {
-            "id": "example.iron_ore",
+            "id": "orebiters.core.mineables.iron",
             "type": "resource",
             "hardness": 8,
             "min_drill_power": 4,
@@ -311,15 +302,15 @@ def test_deserialize_mineable_with_drops(repository: MineableRepository) -> None
     """Deserialize drop references and probabilities."""
     mineable = repository._deserialize(
         {
-            "id": "example.iron_ore",
+            "id": "orebiters.core.mineables.iron",
             "type": "resource",
             "hardness": 8,
             "min_drill_power": 4,
             "min_depth": 10,
             "max_depth": 100,
             "drops": {
-                "example.iron": 0.75,
-                "example.coal": 0.25,
+                "orebiters.core.materials.ferrite_dust": 0.75,
+                "orebiters.core.materials.clay": 0.25,
             },
         }
     )
@@ -329,8 +320,8 @@ def test_deserialize_mineable_with_drops(repository: MineableRepository) -> None
     drops = {drop.item.qualified_id: drop.probability for drop in mineable.drops}
 
     assert drops == {
-        "example.iron": 0.75,
-        "example.coal": 0.25,
+        "orebiters.core.materials.ferrite_dust": 0.75,
+        "orebiters.core.materials.clay": 0.25,
     }
 
     assert all(drop.item.content_type == ContentType.MATERIALS for drop in mineable.drops)
@@ -340,7 +331,7 @@ def test_deserialize_mineable_with_optional_properties(repository: MineableRepos
     """Deserialize optional properties."""
     mineable = repository._deserialize(
         {
-            "id": "example.iron_ore",
+            "id": "orebiters.core.mineables.iron",
             "type": "resource",
             "hardness": 8,
             "min_drill_power": 4,
@@ -362,8 +353,8 @@ def test_deserialize_mineable_with_optional_properties(repository: MineableRepos
 @pytest.mark.parametrize(
     ("qualified_id", "expected_id"),
     [
-        ("example.iron_ore", "iron_ore"),
-        ("my.mod.iron_ore", "iron_ore"),
+        ("orebiters.core.mineables.iron", "iron"),
+        ("my.mod.mineables.iron", "iron"),
     ],
 )
 def test_deserialize_extracts_local_id(

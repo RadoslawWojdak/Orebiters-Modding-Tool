@@ -7,7 +7,7 @@ from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
 )
 from orebiters_modding_tool.domain.mineable import MineableType
 from tests.app.helpers.table import ItemSample, ItemSampleTableModel, create_items
-from tests.factories.mineable import MineableFactory
+from tests.factories.mineable_factory import MineableFactory
 
 
 def create_proxy_model(items: list[ItemSample]) -> TableSortFilterProxyModel:

@@ -6,9 +6,9 @@ import pytest
 from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.material import MaterialFactory
-from tests.factories.material_requirement import MaterialRequirementFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.material_factory import MaterialFactory
+from tests.factories.material_requirement_factory import MaterialRequirementFactory
 
 
 @pytest.fixture
@@ -51,31 +51,31 @@ def test_save_and_load_material(repository: MaterialRepository, project: Project
 
 def test_save_material_writes_icon_tag(repository: MaterialRepository, project: Project) -> None:
     """Persist the material icon tag using its local ID."""
-    repository.save(project, MaterialFactory.create(id="iron"))
+    repository.save(project, MaterialFactory.create(id="mud_patch_mix"))
 
     file_path = (
         repository._mods_directory
         / project.qualified_id
         / ContentType.MATERIALS.value
-        / "iron.json"
+        / "mud_patch_mix.json"
     )
 
     with file_path.open("r", encoding="utf-8") as file:
         data = json.load(file)
 
-    assert data["icon_tag"] == "materials:iron"
+    assert data["icon_tag"] == "materials:mud_patch_mix"
 
 
 def test_serialize_material(project: Project, repository: MaterialRepository) -> None:
     """Serialize a material into the expected JSON structure."""
-    material = MaterialFactory.create(id="iron", crafting_materials=[])
+    material = MaterialFactory.create(id="mud_patch_mix", crafting_materials=[])
 
     data = repository._serialize(project, material)
 
     assert data == {
         "id": material.get_qualified_id(project.qualified_id),
-        "icon_tag": "materials:iron",
         "crafting_materials": {},
+        "icon_tag": "materials:mud_patch_mix",
     }
 
 
@@ -87,17 +87,11 @@ def test_serialize_material_with_crafting_materials(
     material = MaterialFactory.create(
         crafting_materials=[
             MaterialRequirementFactory.create(
-                material_reference=ContentReferenceFactory.create(
-                    content_type=ContentType.MATERIALS,
-                    qualified_id=f"{project.qualified_id}.iron",
-                ),
+                ContentReferenceFactory.create(f"{project.qualified_id}.materials.clay"),
                 amount=3,
             ),
             MaterialRequirementFactory.create(
-                material_reference=ContentReferenceFactory.create(
-                    content_type=ContentType.MATERIALS,
-                    qualified_id=f"{project.qualified_id}.coal",
-                ),
+                ContentReferenceFactory.create(f"{project.qualified_id}.materials.stone"),
                 amount=2,
             ),
         ],
@@ -106,8 +100,8 @@ def test_serialize_material_with_crafting_materials(
     data = repository._serialize(project, material)
 
     assert data["crafting_materials"] == {
-        f"{project.qualified_id}.iron": 3,
-        f"{project.qualified_id}.coal": 2,
+        f"{project.qualified_id}.materials.clay": 3,
+        f"{project.qualified_id}.materials.stone": 2,
     }
 
 
@@ -115,21 +109,21 @@ def test_deserialize_material(repository: MaterialRepository) -> None:
     """Deserialize a material with no crafting materials."""
     material = repository._deserialize(
         {
-            "id": "example.iron",
+            "id": "orebiters.core.materials.mud_patch_mix",
             "crafting_materials": {},
         }
     )
 
-    assert material.id == "iron"
+    assert material.id == "mud_patch_mix"
     assert material.localizations == {}
     assert material.crafting_materials == []
 
 
 def test_deserialize_material_without_crafting_materials(repository: MaterialRepository) -> None:
     """Allow the crafting materials field to be absent."""
-    material = repository._deserialize({"id": "example.iron"})
+    material = repository._deserialize({"id": "orebiters.core.materials.mud_patch_mix"})
 
-    assert material.id == "iron"
+    assert material.id == "mud_patch_mix"
     assert material.crafting_materials == []
 
 
@@ -137,15 +131,15 @@ def test_deserialize_material_with_crafting_materials(repository: MaterialReposi
     """Deserialize crafting material references and amounts."""
     material = repository._deserialize(
         {
-            "id": "example.steel",
+            "id": "orebiters.core.materials.mud_patch_mix",
             "crafting_materials": {
-                "example.iron": 3,
-                "example.coal": 2,
+                "orebiters.core.materials.clay": 3,
+                "orebiters.core.materials.stone": 2,
             },
         }
     )
 
-    assert material.id == "steel"
+    assert material.id == "mud_patch_mix"
     assert len(material.crafting_materials) == 2
 
     requirements = {
@@ -154,8 +148,8 @@ def test_deserialize_material_with_crafting_materials(repository: MaterialReposi
     }
 
     assert requirements == {
-        "example.iron": 3,
-        "example.coal": 2,
+        "orebiters.core.materials.clay": 3,
+        "orebiters.core.materials.stone": 2,
     }
 
     assert all(
@@ -167,8 +161,8 @@ def test_deserialize_material_with_crafting_materials(repository: MaterialReposi
 @pytest.mark.parametrize(
     ("qualified_id", "expected_id"),
     [
-        ("example.iron", "iron"),
-        ("my.mod.iron", "iron"),
+        ("orebiters.core.materials.mud_patch_mix", "mud_patch_mix"),
+        ("my.mod.materials.mud_patch_mix", "mud_patch_mix"),
     ],
 )
 def test_deserialize_extracts_local_id(

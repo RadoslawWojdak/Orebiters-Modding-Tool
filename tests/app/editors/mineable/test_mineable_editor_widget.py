@@ -1,17 +1,17 @@
 from typing import cast
 
 import pytest
-from PySide6.QtWidgets import QApplication, QComboBox, QLabel, QLineEdit, QSpinBox
+from PySide6.QtWidgets import QApplication, QComboBox, QLineEdit, QSpinBox
 
 from orebiters_modding_tool.app.editors import MineableEditorWidget
-from orebiters_modding_tool.app.editors.mineable.drop_editor_widget import DropEditorWidget
+from orebiters_modding_tool.app.editors.drop.drop_editor_widget import DropEditorWidget
 from orebiters_modding_tool.app.widgets.list_widget import ListWidget
 from orebiters_modding_tool.app.widgets.variant_widget import VariantWidget
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.mineable import MineableType
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.drop import DropFactory
-from tests.factories.mineable import MineableFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.drop_factory import DropFactory
+from tests.factories.mineable_factory import MineableFactory
 
 
 def _create_context(
@@ -42,17 +42,6 @@ def test_creates_editor_with_mineable_data(qapp: QApplication) -> None:
     assert cast(QLineEdit, editor._get_field_widget("value")).text() == "25"
     assert cast(QSpinBox, editor._get_field_widget("hardness")).value() == 5
     assert cast(QSpinBox, editor._get_field_widget("min_drill_power")).value() == 4
-
-
-def test_displays_qualified_id(qapp: QApplication) -> None:
-    """Display the mineable qualified ID using the configured mod ID."""
-    mineable = MineableFactory.create(id="iron_ore")
-    editor = MineableEditorWidget(mineable, context=_create_context(mod_id="orebiters.core"))
-
-    qualified_id_widget = editor._get_field_widget("qualified_id")
-
-    assert isinstance(qualified_id_widget, QLabel)
-    assert qualified_id_widget.text() == "orebiters.core.mineables.iron_ore"
 
 
 def test_selects_peak_depth_generation_strategy(qapp: QApplication) -> None:
@@ -147,7 +136,7 @@ def test_does_not_allow_adding_drop_without_available_items(qapp: QApplication) 
 def test_excludes_items_already_used_by_other_drops(qapp: QApplication) -> None:
     """Exclude item references already used by another drop."""
     item_references = tuple(ContentReferenceFactory.create() for _ in range(2))
-    existing_drop = DropFactory.create(item=item_references[0])
+    existing_drop = DropFactory.create(item_references[0])
 
     mineable = MineableFactory.create(drops=[existing_drop])
     editor = MineableEditorWidget(mineable, context=_create_context(item_references))
@@ -170,7 +159,7 @@ def test_excludes_items_already_used_by_other_drops(qapp: QApplication) -> None:
 def test_keeps_current_drop_item_available(qapp: QApplication) -> None:
     """Keep the current drop item available while editing that drop."""
     item_references = tuple(ContentReferenceFactory.create() for _ in range(2))
-    existing_drop = DropFactory.create(item=item_references[0])
+    existing_drop = DropFactory.create(item_references[0])
 
     mineable = MineableFactory.create(drops=[existing_drop])
     editor = MineableEditorWidget(mineable, context=_create_context(item_references))

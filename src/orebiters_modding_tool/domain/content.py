@@ -8,7 +8,7 @@ from orebiters_modding_tool.domain.enums import DisplayEnum
 class ContentType(DisplayEnum):
     """Types of content available in a mod project."""
 
-    # ITEMS = ("items", "Items", "Item")
+    ITEMS = ("items", "Items", "Item")
     MATERIALS = ("materials", "Materials", "Material")
     MINEABLES = ("mineables", "Mineables", "Mineable")
 

@@ -30,6 +30,24 @@ class ContentEditorWidget[T: Content[Any]](BaseEditorWidget[T]):
         """
         return cls._registry[content_type]
 
+    # =========================================================================
+    # Private API
+    # =========================================================================
+
+    def _get_qualified_id(self) -> str:
+        """Return the qualified ID of the edited content.
+
+        :returns: Qualified ID of the edited content.
+        :raises KeyError: If the mod ID is missing from the context.
+        :raises TypeError: If the mod ID is not a string.
+        """
+        mod_id = self._context["mod_id"]
+
+        if not isinstance(mod_id, str):
+            raise TypeError("Context value 'mod_id' must be a string.")
+
+        return self._item.get_qualified_id(mod_id)
+
     @classmethod
     def _register(cls) -> None:
         """Register the editor class."""

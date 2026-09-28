@@ -5,8 +5,8 @@ from PySide6.QtWidgets import QApplication, QTreeView
 from orebiters_modding_tool.app.docks.project_explorer import ProjectExplorer
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.services.project_service import ProjectService
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.material import MaterialFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.material_factory import MaterialFactory
 
 
 def generate_expected_rows() -> list[str]:
@@ -31,7 +31,7 @@ def test_create_item_creates_non_editable_item_with_content_reference(
 ) -> None:
     """Create a non-editable item with its content reference."""
     explorer = ProjectExplorer(project_service)
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.materials.iron")
+    reference = ContentReferenceFactory.create("orebiters.core.materials.iron")
 
     item = explorer._create_item("Iron", content_reference=reference)
 
@@ -211,7 +211,7 @@ def test_content_reference_sort_key_returns_casefolded_content_id(
 ) -> None:
     """Return a case-insensitive sort key for a content reference."""
     explorer = ProjectExplorer(project_service)
-    reference = ContentReferenceFactory.create(qualified_id="test.test_mod.materials.Copper")
+    reference = ContentReferenceFactory.create("test.test_mod.materials.Copper")
 
     assert explorer._content_reference_sort_key(reference) == "copper"
 
@@ -225,10 +225,7 @@ def test_double_click_emits_content_open_requested(
 
     item = explorer._create_item(
         "Iron",
-        content_reference=ContentReferenceFactory.create(
-            content_type=ContentType.MATERIALS,
-            qualified_id="orebiters.core.materials.iron",
-        ),
+        content_reference=ContentReferenceFactory.create("orebiters.core.materials.iron"),
     )
     explorer._model.appendRow(item)
 

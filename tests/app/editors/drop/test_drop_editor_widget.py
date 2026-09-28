@@ -3,10 +3,10 @@ from typing import cast
 import pytest
 from PySide6.QtWidgets import QApplication, QComboBox, QDoubleSpinBox
 
-from orebiters_modding_tool.app.editors.mineable.drop_editor_widget import DropEditorWidget
+from orebiters_modding_tool.app.editors.drop.drop_editor_widget import DropEditorWidget
 from orebiters_modding_tool.domain.content import ContentReference
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.drop import DropFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.drop_factory import DropFactory
 
 
 @pytest.fixture
@@ -36,7 +36,7 @@ def test_creates_item_choices_from_context(
     item_references: tuple[ContentReference, ...],
 ) -> None:
     """Create item choices from the configured context provider."""
-    drop = DropFactory.create(item=item_references[0])
+    drop = DropFactory.create(item_references[0])
     editor = DropEditorWidget(drop, context=_create_context(item_references))
 
     item_widget = cast(QComboBox, editor._get_field_widget("item"))
@@ -49,7 +49,7 @@ def test_creates_item_choices_from_context(
 
 def test_formats_item_choices_using_qualified_id(qapp: QApplication) -> None:
     """Display qualified IDs for item choices."""
-    item = ContentReferenceFactory.create(qualified_id="test.test_mod.materials.iron_ore")
+    item = ContentReferenceFactory.create("test.test_mod.materials.iron_ore")
 
     assert DropEditorWidget._format_item_choice(item) == "test.test_mod.materials.iron_ore"
 
@@ -70,7 +70,7 @@ def test_excludes_references_from_excluded_provider(
     excluded = item_references[1]
 
     editor = DropEditorWidget(
-        DropFactory.create(item=item_references[0]),
+        DropFactory.create(item_references[0]),
         context=_create_context(
             item_references,
             excluded_item_references_provider=lambda current_item: (excluded,),
@@ -92,7 +92,7 @@ def test_uses_all_references_without_excluded_provider(
 ) -> None:
     """Use all item references when no exclusion provider is configured."""
     editor = DropEditorWidget(
-        DropFactory.create(item=item_references[0]),
+        DropFactory.create(item_references[0]),
         context=_create_context(item_references),
     )
 
@@ -108,7 +108,7 @@ def test_saves_selected_item_and_probability(
     item_references: tuple[ContentReference, ...],
 ) -> None:
     """Save the selected item and probability."""
-    drop = DropFactory.create(item=item_references[0], probability=0.5)
+    drop = DropFactory.create(item_references[0], probability=0.5)
     editor = DropEditorWidget(drop, context=_create_context(item_references))
 
     item_widget = cast(QComboBox, editor._get_field_widget("item"))
