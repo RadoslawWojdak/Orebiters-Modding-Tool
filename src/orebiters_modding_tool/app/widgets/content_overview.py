@@ -51,6 +51,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         self._content_reference = content_reference
         self._model = model
         self._proxy_model = TableSortFilterProxyModel(model)
+        self._proxy_model.setSortRole(ContentTableModel.SORT_ROLE)
         self._config = config
 
         self._setup_layout()

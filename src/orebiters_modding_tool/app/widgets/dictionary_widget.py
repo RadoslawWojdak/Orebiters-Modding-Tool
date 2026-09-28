@@ -31,6 +31,10 @@ class DictionaryWidget(QWidget):
         self._setup_layout()
         self._setup_item_widgets(items)
 
+    def refresh(self) -> None:
+        """Refresh operation button states."""
+        pass
+
     def show_item(self, key: object) -> None:
         """Display the widget associated with a dictionary key.
 

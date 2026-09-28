@@ -5,8 +5,9 @@ from PySide6.QtWidgets import QApplication
 
 from orebiters_modding_tool.app.widgets.workspace import Workspace
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
+from orebiters_modding_tool.domain.project import Project
+from orebiters_modding_tool.infrastructure.content_repository import ContentRepository
 from orebiters_modding_tool.infrastructure.localization_repository import LocalizationRepository
-from orebiters_modding_tool.infrastructure.material_repository import MaterialRepository
 from orebiters_modding_tool.infrastructure.project_repository import ProjectRepository
 from orebiters_modding_tool.services.project_service import ProjectService
 
@@ -23,12 +24,27 @@ def qapp() -> QApplication:
 
 
 @pytest.fixture
+def project() -> Project:
+    """Provide a project."""
+    return Project(
+        namespace="test",
+        mod_id="test_mod",
+        name="Test Mod",
+    )
+
+
+@pytest.fixture
 def project_service(tmp_path: Path) -> ProjectService:
     """Provide a project service with temporary repositories."""
+    content_repositories = {
+        content_type: ContentRepository.get_class(content_type)(tmp_path)
+        for content_type in ContentType
+    }
+
     return ProjectService(
         project_repository=ProjectRepository(tmp_path),
         localization_repository=LocalizationRepository(tmp_path),
-        material_repository=MaterialRepository(tmp_path),
+        content_repositories=content_repositories,
     )
 
 

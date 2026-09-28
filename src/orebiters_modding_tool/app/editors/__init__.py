@@ -1,0 +1,3 @@
+from .item.item_editor_widget import ItemEditorWidget as ItemEditorWidget
+from .material.material_editor_widget import MaterialEditorWidget as MaterialEditorWidget
+from .mineable.mineable_editor_widget import MineableEditorWidget as MineableEditorWidget

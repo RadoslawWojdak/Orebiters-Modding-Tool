@@ -1,6 +1,6 @@
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.domain.material import MaterialRequirement
-from tests.factories.content import ContentReferenceFactory
+from tests.factories.content_factory import ContentReferenceFactory
 
 
 class MaterialRequirementFactory:

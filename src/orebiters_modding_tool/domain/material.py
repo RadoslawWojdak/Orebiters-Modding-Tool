@@ -25,7 +25,7 @@ class MaterialRequirement:
     amount: int
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(kw_only=True)
 class Material(Content[MaterialLocalization]):
     """Editable material definition."""
 

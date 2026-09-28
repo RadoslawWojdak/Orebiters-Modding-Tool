@@ -19,24 +19,48 @@ class ContentReferenceFactory:
     @classmethod
     def create(
         cls,
-        *,
-        content_type: ContentType = ContentType.MATERIALS,
         qualified_id: str | None = None,
+        *,
+        content_type: ContentType | None = None,
     ) -> ContentReference:
         """Create a content reference.
 
         :param content_type: Type of referenced content.
+            If omitted, it is inferred from the qualified ID.
         :param qualified_id: Fully qualified content ID.
         :returns: Created content reference.
+        :raises ValueError: If the content type cannot be inferred.
         """
         if qualified_id is None:
             cls._counter += 1
-            qualified_id = f"test.content_{cls._counter}"
+            qualified_id = f"test.test_mod.materials.content_{cls._counter}"
+
+        if content_type is None:
+            content_type = cls._infer_content_type(qualified_id)
 
         return ContentReference(
             content_type=content_type,
             qualified_id=qualified_id,
         )
+
+    @staticmethod
+    def _infer_content_type(qualified_id: str) -> ContentType:
+        """Infer the content type from a qualified ID.
+
+        :param qualified_id: Fully qualified content ID.
+        :returns: Inferred content type.
+        :raises ValueError: If the qualified ID does not contain a known type.
+        """
+        parts = qualified_id.split(".")
+
+        if len(parts) != 4:
+            raise ValueError(f"Cannot infer content type from qualified ID: {qualified_id!r}.")
+
+        for content_type in ContentType:
+            if parts[-2] == content_type.value:
+                return content_type
+
+        raise ValueError(f"Cannot infer content type from qualified ID: {qualified_id!r}.")
 
     @staticmethod
     def from_content(
@@ -81,11 +105,12 @@ class ContentFactory:
             id = f"content_{cls._counter}"
 
         if localizations is None:
+            name = id.replace("_", " ").title()
             localizations = {
                 "en": ContentLocalization(
-                    one=id.replace("_", " ").title(),
-                    few=id.replace("_", " ").title(),
-                    many=id.replace("_", " ").title(),
+                    one=name,
+                    few=name,
+                    many=name,
                 ),
             }
 

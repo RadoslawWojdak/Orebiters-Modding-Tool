@@ -3,8 +3,8 @@ import pytest
 from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.project import Project
 from orebiters_modding_tool.domain.project_registry import ProjectRegistry
-from tests.factories.content import ContentReferenceFactory
-from tests.factories.material import MaterialFactory
+from tests.factories.content_factory import ContentReferenceFactory
+from tests.factories.material_factory import MaterialFactory
 
 
 def test_init_registers_projects_and_content_references() -> None:

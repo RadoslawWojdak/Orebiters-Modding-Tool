@@ -8,7 +8,7 @@ from orebiters_modding_tool.app.models.column import Column
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.views.content_table_view import ContentTableView
 from orebiters_modding_tool.domain.content import Content, ContentState
-from tests.factories.content import ContentFactory
+from tests.factories.content_factory import ContentFactory
 
 
 class ContentTableModelSample(ContentTableModel[Content]):

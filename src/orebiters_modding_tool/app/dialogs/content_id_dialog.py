@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from orebiters_modding_tool.domain.content import ContentType
 from orebiters_modding_tool.domain.project_identifier import normalize_identifier
 
 
@@ -17,13 +18,15 @@ class ContentIdDialog(QDialog):
 
     def __init__(
         self,
-        content_name: str,
+        content_type: ContentType,
         on_create: Callable[[str], None],
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
 
-        self.setWindowTitle(f"Create {content_name}")
+        self._content_type = content_type
+
+        self.setWindowTitle(f"Create {content_type.singular_display_name}")
         self.setModal(True)
 
         self._on_create = on_create
@@ -46,8 +49,10 @@ class ContentIdDialog(QDialog):
             parent=self,
         )
 
+        content_name = self._content_type.singular_display_name.lower()
+
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel("Enter a unique ID for the new material:", self))
+        layout.addWidget(QLabel(f"Enter a unique ID for the new {content_name}:", self))
         layout.addWidget(self._id_edit)
         layout.addWidget(self._error_label)
         layout.addWidget(self._button_box)

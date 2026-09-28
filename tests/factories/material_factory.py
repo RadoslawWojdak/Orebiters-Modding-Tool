@@ -33,11 +33,12 @@ class MaterialFactory:
             id = f"material_{cls._counter}"
 
         if localizations is None:
+            name = id.replace("_", " ").title()
             localizations = {
                 "en": MaterialLocalization(
-                    one=id.replace("_", " ").title(),
-                    few=id.replace("_", " ").title(),
-                    many=id.replace("_", " ").title(),
+                    one=name,
+                    few=name,
+                    many=name,
                     hint="Test material.",
                     description="Material created for testing.",
                 ),

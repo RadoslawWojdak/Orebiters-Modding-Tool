@@ -1,7 +1,7 @@
 import pytest
 
 from orebiters_modding_tool.domain.content import ContentReference
-from tests.factories.content import ContentReferenceFactory
+from tests.factories.content_factory import ContentReferenceFactory
 
 
 def test_is_category_returns_true_for_category_reference(
@@ -13,14 +13,14 @@ def test_is_category_returns_true_for_category_reference(
 
 def test_is_category_returns_false_for_content_reference() -> None:
     """Return false for a reference targeting specific content."""
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    reference = ContentReferenceFactory.create("orebiters.core.materials.stone")
 
     assert not reference.is_category
 
 
 def test_namespace_returns_namespace_from_qualified_id() -> None:
     """Return the namespace from a qualified content ID."""
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    reference = ContentReferenceFactory.create("orebiters.core.materials.stone")
 
     assert reference.namespace == "orebiters"
 
@@ -35,7 +35,7 @@ def test_namespace_raises_for_category_reference(
 
 def test_mod_id_returns_mod_id_from_qualified_id() -> None:
     """Return the mod ID from a qualified content ID."""
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    reference = ContentReferenceFactory.create("orebiters.core.materials.stone")
 
     assert reference.mod_id == "core"
 
@@ -50,9 +50,9 @@ def test_mod_id_raises_for_category_reference(
 
 def test_content_id_returns_content_id_from_qualified_id() -> None:
     """Return the content ID from a qualified content ID."""
-    reference = ContentReferenceFactory.create(qualified_id="orebiters.core.iron")
+    reference = ContentReferenceFactory.create("orebiters.core.materials.stone")
 
-    assert reference.content_id == "iron"
+    assert reference.content_id == "stone"
 
 
 def test_content_id_raises_for_category_reference(

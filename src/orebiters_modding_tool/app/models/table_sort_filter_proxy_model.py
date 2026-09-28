@@ -1,3 +1,5 @@
+from enum import Enum
+
 from PySide6.QtCore import QModelIndex, QObject, QPersistentModelIndex, QSortFilterProxyModel, Qt
 
 from orebiters_modding_tool.app.models.base_table_model import BaseTableModel
@@ -91,8 +93,8 @@ class TableSortFilterProxyModel[T](QSortFilterProxyModel):
         if not column.sortable:
             return False
 
-        left_value = source_model.data(left, Qt.ItemDataRole.DisplayRole)
-        right_value = source_model.data(right, Qt.ItemDataRole.DisplayRole)
+        left_value = source_model.data(left, self.sortRole())
+        right_value = source_model.data(right, self.sortRole())
 
         if left_value is None:
             return right_value is not None
@@ -100,10 +102,16 @@ class TableSortFilterProxyModel[T](QSortFilterProxyModel):
         if right_value is None:
             return False
 
-        if isinstance(left_value, int | float) and isinstance(right_value, int | float):
-            return left_value < right_value
+        left_key = self._get_sort_key(left_value)
+        right_key = self._get_sort_key(right_value)
 
-        return str(left_value).casefold() < str(right_value).casefold()
+        if type(left_key) is not type(right_key):
+            raise TypeError(
+                f"Cannot compare sort keys of different types: "
+                f"{type(left_key).__name__} and {type(right_key).__name__}."
+            )
+
+        return left_key < right_key  # type: ignore[operator, no-any-return]
 
     def is_column_sortable(self, column: int) -> bool:
         """Return whether a column can be sorted.
@@ -125,3 +133,17 @@ class TableSortFilterProxyModel[T](QSortFilterProxyModel):
             raise TypeError("Source model must be a BaseTableModel.")
 
         return source_model
+
+    @classmethod
+    def _get_sort_key(cls, value: object) -> object:
+        """Normalize a value for sorting."""
+        if isinstance(value, Enum):
+            return cls._get_sort_key(value.value)
+
+        if isinstance(value, tuple):
+            return tuple(cls._get_sort_key(item) for item in value)
+
+        if isinstance(value, str):
+            return value.casefold()
+
+        return value
