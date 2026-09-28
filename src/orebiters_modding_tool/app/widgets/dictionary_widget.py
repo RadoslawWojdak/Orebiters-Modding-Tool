@@ -30,6 +30,7 @@ class DictionaryWidget(QWidget):
 
         self._setup_layout()
         self._setup_item_widgets(items)
+        self._update_item_buttons()
 
     def refresh(self) -> None:
         """Refresh operation button states."""
@@ -44,6 +45,7 @@ class DictionaryWidget(QWidget):
         item_widget = self._item_widgets[key]
 
         self._stacked_widget.setCurrentWidget(item_widget)
+        self._update_item_buttons()
         self.updateGeometry()
 
     def _setup_layout(self) -> None:
@@ -74,6 +76,7 @@ class DictionaryWidget(QWidget):
         item_widget = self._item_widget_factory(value)
 
         item_button = QPushButton(self._item_label_factory(key), self)
+        item_button.setCheckable(True)
         item_button.clicked.connect(lambda _checked=False, item_key=key: self.show_item(item_key))
 
         self._item_widgets[key] = item_widget
@@ -81,3 +84,10 @@ class DictionaryWidget(QWidget):
 
         self._stacked_widget.addWidget(item_widget)
         self._item_buttons_layout.addWidget(item_button)
+
+    def _update_item_buttons(self) -> None:
+        """Update item button states based on the current widget."""
+        current_widget = self._stacked_widget.currentWidget()
+
+        for key, button in self._item_buttons.items():
+            button.setChecked(self._item_widgets[key] is current_widget)
