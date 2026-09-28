@@ -119,24 +119,6 @@ class MainWindow(QMainWindow):
             icon=style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward),
         )
         self._redo_action.setEnabled(False)
-        self._cut_action = self._create_action(
-            "Cut",
-            self._cut,
-            shortcut=QKeySequence.StandardKey.Cut,
-        )
-        self._cut_action.setEnabled(False)
-        self._copy_action = self._create_action(
-            "Copy",
-            self._copy,
-            shortcut=QKeySequence.StandardKey.Copy,
-        )
-        self._copy_action.setEnabled(False)
-        self._paste_action = self._create_action(
-            "Paste",
-            self._paste,
-            shortcut=QKeySequence.StandardKey.Paste,
-        )
-        self._paste_action.setEnabled(False)
 
         # Help Actions
         self._show_documentation_action = self._create_action(
@@ -174,10 +156,9 @@ class MainWindow(QMainWindow):
         edit_menu = menu_bar.addMenu("Edit")
         edit_menu.addAction(self._undo_action)
         edit_menu.addAction(self._redo_action)
-        edit_menu.addSeparator()
-        edit_menu.addAction(self._cut_action)
-        edit_menu.addAction(self._copy_action)
-        edit_menu.addAction(self._paste_action)
+
+        view_menu = menu_bar.addMenu("View")
+        view_menu.addAction(self._project_explorer_action)
 
         help_menu = menu_bar.addMenu("Help")
         help_menu.addAction(self._show_documentation_action)
@@ -214,6 +195,9 @@ class MainWindow(QMainWindow):
         self._project_explorer = ProjectExplorer(self._project_service, self)
 
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
+
+        self._project_explorer_action = self._project_explorer.toggleViewAction()
+        self._project_explorer_action.setText("Project Explorer")
 
         self._project_explorer.content_open_requested.connect(self._open_content)
 
@@ -365,18 +349,6 @@ class MainWindow(QMainWindow):
 
     def _redo(self) -> None:
         """Redo the previously undone action."""
-        pass
-
-    def _cut(self) -> None:
-        """Cut the selected content."""
-        pass
-
-    def _copy(self) -> None:
-        """Copy the selected content."""
-        pass
-
-    def _paste(self) -> None:
-        """Paste content from the clipboard."""
         pass
 
     def _show_documentation(self) -> None:
