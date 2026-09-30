@@ -33,7 +33,7 @@ def create_widget(materials: list[Material]) -> ContentOverviewWidget[Material]:
     """
     model = MaterialTableModel(materials)
 
-    widget = ContentOverviewWidget(
+    return ContentOverviewWidget(
         content_reference=ContentReference(content_type=ContentType.MATERIALS),
         config=ContentOverviewConfig(
             title="Materials",
@@ -41,14 +41,89 @@ def create_widget(materials: list[Material]) -> ContentOverviewWidget[Material]:
         ),
         model=model,
     )
+
+
+def show_widget(qtbot, widget: ContentOverviewWidget[Material]) -> None:
+    """Show the widget and wait for table layout initialization.
+
+    :param qtbot: Qt test helper.
+    :param widget: Content overview widget.
+    """
+    qtbot.addWidget(widget)
+    widget.resize(800, 500)
     widget.show()
 
-    return widget
+
+def select_rows(widget: ContentOverviewWidget[Material], rows: list[int]) -> None:
+    """Select table rows.
+
+    :param widget: Content overview widget.
+    :param rows: Row indices in the displayed table.
+    """
+    table_view = widget._table_view
+    selection_model = table_view.selectionModel()
+
+    for row in rows:
+        index = table_view.model().index(row, 0)
+        selection_model.select(
+            index,
+            selection_model.SelectionFlag.Select | selection_model.SelectionFlag.Rows,
+        )
 
 
-def test_add_action_emits_add_requested(qapp: QApplication) -> None:
+def get_visible_item_ids(widget: ContentOverviewWidget[Material]) -> list[str]:
+    """Return IDs of items currently displayed in the table.
+
+    :param widget: Content overview widget.
+    :returns: Visible item IDs in display order.
+    """
+    proxy_model = widget._table_view.model()
+
+    return [
+        proxy_model.data(proxy_model.index(row, 0), Qt.ItemDataRole.DisplayRole)
+        for row in range(proxy_model.rowCount())
+    ]
+
+
+# =============================================================================
+# Public API
+# =============================================================================
+
+
+def test_content_reference_returns_configured_reference(qapp: QApplication) -> None:
+    """Expose the content reference represented by the widget."""
+    widget = create_widget([])
+
+    assert widget.content_reference == ContentReference(content_type=ContentType.MATERIALS)
+
+
+def test_model_returns_configured_model(qapp: QApplication) -> None:
+    """Expose the model used by the widget."""
+    materials = create_materials()
+    widget = create_widget(materials)
+
+    assert widget.model.rowCount() == len(materials)
+
+
+def test_refresh_content_states_refreshes_model(qapp: QApplication) -> None:
+    """Refresh content states through the content table model."""
+    widget = create_widget(create_materials())
+
+    with patch.object(widget.model, "refresh_content_states") as refresh_state:
+        widget.refresh_content_states()
+
+    refresh_state.assert_called_once_with()
+
+
+# =============================================================================
+# Add
+# =============================================================================
+
+
+def test_add_action_emits_add_requested(qtbot) -> None:
     """Emit the content reference when adding content."""
     widget = create_widget([])
+    show_widget(qtbot, widget)
 
     received: list[ContentReference] = []
     widget.add_requested.connect(received.append)
@@ -58,9 +133,15 @@ def test_add_action_emits_add_requested(qapp: QApplication) -> None:
     assert received == [widget.content_reference]
 
 
-def test_edit_action_does_nothing_without_selection(qapp: QApplication) -> None:
+# =============================================================================
+# Edit
+# =============================================================================
+
+
+def test_edit_action_does_nothing_without_selection(qtbot) -> None:
     """Do not request editing without a selection."""
     widget = create_widget(create_materials())
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
@@ -70,32 +151,46 @@ def test_edit_action_does_nothing_without_selection(qapp: QApplication) -> None:
     assert received == []
 
 
-def test_edit_action_emits_selected_items(qapp: QApplication) -> None:
-    """Emit all selected items when editing."""
+def test_edit_action_emits_selected_items(qtbot) -> None:
+    """Emit selected items when editing."""
     materials = create_materials()
     widget = create_widget(materials)
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
 
-    selection_model = widget._table_view.selectionModel()
-    selection_model.select(
-        widget.model.index(0, 0),
-        selection_model.SelectionFlag.Select | selection_model.SelectionFlag.Rows,
-    )
-    selection_model.select(
-        widget.model.index(2, 0),
-        selection_model.SelectionFlag.Select | selection_model.SelectionFlag.Rows,
-    )
-
+    select_rows(widget, [0, 2])
     widget._edit_action.trigger()
 
     assert received == [(widget.content_reference, [materials[0], materials[2]])]
 
 
-def test_delete_action_does_nothing_without_selection(qapp: QApplication) -> None:
+def test_edit_action_emits_items_in_view_order(qtbot) -> None:
+    """Emit selected items in the order of the displayed rows."""
+    materials = create_materials()
+    widget = create_widget(materials)
+    show_widget(qtbot, widget)
+
+    received: list[tuple[ContentReference, list[Material]]] = []
+    widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
+
+    widget._table_view.model().sort(0, Qt.SortOrder.AscendingOrder)
+    select_rows(widget, [0, 2])
+    widget._edit_action.trigger()
+
+    assert received == [(widget.content_reference, [materials[1], materials[0]])]
+
+
+# =============================================================================
+# Delete
+# =============================================================================
+
+
+def test_delete_action_does_nothing_without_selection(qtbot) -> None:
     """Do not request deletion without a selection."""
     widget = create_widget(create_materials())
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.delete_requested.connect(lambda reference, items: received.append((reference, items)))
@@ -105,79 +200,88 @@ def test_delete_action_does_nothing_without_selection(qapp: QApplication) -> Non
     assert received == []
 
 
-def test_delete_action_emits_selected_items(qapp: QApplication) -> None:
-    """Emit all selected items when deleting."""
+def test_delete_action_emits_selected_items(qtbot) -> None:
+    """Emit selected items when deleting."""
     materials = create_materials()
     widget = create_widget(materials)
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.delete_requested.connect(lambda reference, items: received.append((reference, items)))
 
-    selection_model = widget._table_view.selectionModel()
-    selection_model.select(
-        widget.model.index(1, 0),
-        selection_model.SelectionFlag.Select | selection_model.SelectionFlag.Rows,
-    )
-
+    select_rows(widget, [1])
     widget._delete_action.trigger()
 
     assert received == [(widget.content_reference, [materials[1]])]
 
 
-def test_double_click_emits_clicked_item(qapp: QApplication) -> None:
-    """Emit the double-clicked item for editing."""
+# =============================================================================
+# Double-click
+# =============================================================================
+
+
+def test_double_click_emits_clicked_item(qtbot) -> None:
+    """Request editing the item double-clicked by the user."""
     materials = create_materials()
     widget = create_widget(materials)
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
 
-    index = widget._table_view.model().index(1, 0)
-    widget._on_item_double_clicked(index)
+    table_view = widget._table_view
+    index = table_view.model().index(1, 0)
+    click_position = table_view.visualRect(index).center()
+
+    assert table_view.visualRect(index).isValid()
+
+    qtbot.mouseClick(table_view.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
+    qtbot.mouseDClick(table_view.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
 
     assert received == [(widget.content_reference, [materials[1]])]
 
 
-def test_double_click_resolves_item_through_proxy_model(qapp: QApplication) -> None:
-    """Resolve the double-clicked item through the proxy model."""
+def test_double_click_resolves_item_after_sorting(qtbot) -> None:
+    """Resolve the correct item after the displayed rows are sorted."""
     materials = create_materials()
     widget = create_widget(materials)
+    show_widget(qtbot, widget)
 
     received: list[tuple[ContentReference, list[Material]]] = []
     widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
 
-    proxy_index = widget._table_view.model().index(1, 0)
-    widget._on_item_double_clicked(proxy_index)
+    table_view = widget._table_view
+    table_view.model().sort(0, Qt.SortOrder.AscendingOrder)
+
+    index = table_view.model().index(0, 0)
+    click_position = table_view.visualRect(index).center()
+
+    qtbot.mouseClick(table_view.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
+    qtbot.mouseDClick(table_view.viewport(), Qt.MouseButton.LeftButton, pos=click_position)
 
     assert received == [(widget.content_reference, [materials[1]])]
 
 
-def test_sorted_view_resolves_item_through_proxy_model(qapp: QApplication) -> None:
-    """Resolve the correct item after sorting the view."""
-    materials = create_materials()
-    widget = create_widget(materials)
-
-    proxy_model = widget._table_view.model()
-    proxy_model.sort(0, Qt.SortOrder.AscendingOrder)
-
-    received: list[tuple[ContentReference, list[Material]]] = []
-    widget.edit_requested.connect(lambda reference, items: received.append((reference, items)))
-
-    proxy_index = proxy_model.index(0, 0)
-    widget._on_item_double_clicked(proxy_index)
-
-    assert received == [(widget.content_reference, [materials[1]])]
+# =============================================================================
+# Select all
+# =============================================================================
 
 
-def test_select_all_action_selects_all_rows(qapp: QApplication) -> None:
-    """Select all content rows."""
+def test_select_all_action_selects_all_rows(qtbot) -> None:
+    """Select all rows in the table."""
     widget = create_widget(create_materials())
+    show_widget(qtbot, widget)
 
     widget._select_all_action.trigger()
 
     selected_rows = widget._table_view.selectionModel().selectedRows()
 
-    assert [index.row() for index in selected_rows] == [0, 1, 2]
+    assert len(selected_rows) == 3
+
+
+# =============================================================================
+# Content visibility
+# =============================================================================
 
 
 def test_empty_model_shows_message_and_disables_edit_delete(qapp: QApplication) -> None:
@@ -187,6 +291,15 @@ def test_empty_model_shows_message_and_disables_edit_delete(qapp: QApplication) 
     assert widget._content_layout.currentWidget() is widget._message_label
     assert not widget._edit_action.isEnabled()
     assert not widget._delete_action.isEnabled()
+
+
+def test_non_empty_model_shows_table_and_enables_edit_delete(qapp: QApplication) -> None:
+    """Show the table and enable content actions when items exist."""
+    widget = create_widget(create_materials())
+
+    assert widget._content_layout.currentWidget() is widget._table_view
+    assert widget._edit_action.isEnabled()
+    assert widget._delete_action.isEnabled()
 
 
 def test_content_visibility_updates_when_model_changes(qapp: QApplication) -> None:
@@ -200,14 +313,14 @@ def test_content_visibility_updates_when_model_changes(qapp: QApplication) -> No
     assert widget._delete_action.isEnabled()
 
 
-def test_refresh_content_states_refreshes_model(qapp: QApplication) -> None:
-    """Refresh content states through the content table model."""
+def test_filtering_all_rows_does_not_show_empty_message(qapp: QApplication) -> None:
+    """Keep the table visible when filtering produces no matches."""
     widget = create_widget(create_materials())
 
-    with patch.object(widget.model, "refresh_content_states") as refresh_state:
-        widget.refresh_content_states()
+    widget._filter_edit.setText("unknown")
 
-    refresh_state.assert_called_once()
+    assert widget._table_view.model().rowCount() == 0
+    assert widget._content_layout.currentWidget() is widget._table_view
 
 
 # =============================================================================
@@ -219,9 +332,14 @@ def test_filter_edit_has_expected_configuration(qapp: QApplication) -> None:
     """Configure the filter input for content searching."""
     widget = create_widget(create_materials())
 
-    assert widget._filter_edit.objectName() == "filter_edit"
-    assert widget._filter_edit.placeholderText() == "Search materials..."
-    assert widget._filter_edit.isClearButtonEnabled()
+    filter_edit = widget.findChild(
+        __import__("PySide6.QtWidgets", fromlist=["QLineEdit"]).QLineEdit,
+        "filter_edit",
+    )
+
+    assert filter_edit is not None
+    assert filter_edit.placeholderText() == "Search materials..."
+    assert filter_edit.isClearButtonEnabled()
 
 
 def test_filter_edit_filters_table_rows(qapp: QApplication) -> None:
@@ -230,14 +348,7 @@ def test_filter_edit_filters_table_rows(qapp: QApplication) -> None:
 
     widget._filter_edit.setText("copper")
 
-    assert widget._table_view.model().rowCount() == 1
-    assert (
-        widget._table_view.model().data(
-            widget._table_view.model().index(0, 0),
-            Qt.ItemDataRole.DisplayRole,
-        )
-        == "copper_ore"
-    )
+    assert get_visible_item_ids(widget) == ["copper_ore"]
 
 
 def test_filter_edit_is_case_insensitive(qapp: QApplication) -> None:
@@ -246,14 +357,7 @@ def test_filter_edit_is_case_insensitive(qapp: QApplication) -> None:
 
     widget._filter_edit.setText("COPPER")
 
-    assert widget._table_view.model().rowCount() == 1
-    assert (
-        widget._table_view.model().data(
-            widget._table_view.model().index(0, 0),
-            Qt.ItemDataRole.DisplayRole,
-        )
-        == "copper_ore"
-    )
+    assert get_visible_item_ids(widget) == ["copper_ore"]
 
 
 def test_filter_edit_can_match_multiple_rows(qapp: QApplication) -> None:
@@ -267,13 +371,7 @@ def test_filter_edit_can_match_multiple_rows(qapp: QApplication) -> None:
 
     widget._filter_edit.setText("iron")
 
-    proxy_model = widget._table_view.model()
-
-    assert proxy_model.rowCount() == 2
-    assert [
-        proxy_model.data(proxy_model.index(row, 0), Qt.ItemDataRole.DisplayRole)
-        for row in range(proxy_model.rowCount())
-    ] == ["iron_ore", "iron_ingot"]
+    assert get_visible_item_ids(widget) == ["iron_ore", "iron_ingot"]
 
 
 def test_clearing_filter_restores_all_rows(qapp: QApplication) -> None:
@@ -281,12 +379,11 @@ def test_clearing_filter_restores_all_rows(qapp: QApplication) -> None:
     widget = create_widget(create_materials())
 
     widget._filter_edit.setText("copper")
-
-    assert widget._table_view.model().rowCount() == 1
+    assert len(get_visible_item_ids(widget)) == 1
 
     widget._filter_edit.clear()
 
-    assert widget._table_view.model().rowCount() == 3
+    assert len(get_visible_item_ids(widget)) == 3
 
 
 def test_filter_with_no_matches_keeps_table_visible(qapp: QApplication) -> None:
@@ -295,5 +392,5 @@ def test_filter_with_no_matches_keeps_table_visible(qapp: QApplication) -> None:
 
     widget._filter_edit.setText("unknown")
 
-    assert widget._table_view.model().rowCount() == 0
+    assert get_visible_item_ids(widget) == []
     assert widget._content_layout.currentWidget() is widget._table_view

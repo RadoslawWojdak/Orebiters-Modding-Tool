@@ -1,17 +1,22 @@
 import json
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
+    QMenuBar,
     QMessageBox,
     QStatusBar,
     QStyle,
+    QTableView,
     QToolBar,
+    QWidget,
 )
 
 from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDialog
@@ -50,7 +55,24 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
         self._setup_status_bar()
 
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
         self._update_project_actions()
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """Handle events within the main window."""
+        if not isinstance(watched, QWidget):
+            return super().eventFilter(watched, event)
+
+        if watched.window() is not self:
+            return super().eventFilter(watched, event)
+
+        if event.type() is QEvent.Type.MouseButtonPress:
+            self._handle_mouse_press(watched)
+
+        return super().eventFilter(watched, event)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle the main window close request.
@@ -201,6 +223,17 @@ class MainWindow(QMainWindow):
 
         self._project_explorer.content_open_requested.connect(self._open_content)
 
+    def _handle_mouse_press(self, watched: QWidget) -> None:
+        """Handle mouse presses within the main window.
+
+        :param watched: Widget that received the event.
+        """
+        if self._is_menu_widget(watched):
+            return
+
+        clicked_table = self._find_parent_table(watched)
+        self._clear_table_selections(excluded_table=clicked_table)
+
     def _on_workspace_content_changed(self, change: ContentChange) -> None:
         """Handle content changes reported by the workspace."""
         self._project_explorer.refresh()
@@ -218,7 +251,7 @@ class MainWindow(QMainWindow):
         """Create and configure an application action.
 
         :param text: Text displayed for the action.
-        :param handler: Callback executed when the action is triggered.
+        :param handler: Callback executed for the action.
         :param shortcut: Optional keyboard shortcut.
         :param icon: Optional action icon.
         :returns: Configured application action.
@@ -421,7 +454,8 @@ class MainWindow(QMainWindow):
 
         self._project_statistics_label.setText(" | ".join(statistics))
 
-    def _format_content_change(self, change: ContentChange) -> str:
+    @staticmethod
+    def _format_content_change(change: ContentChange) -> str:
         """Format a content change for the status bar."""
         if change.change_type is ContentChangeType.CREATED:
             return f"Created {change.content_name}"
@@ -438,3 +472,37 @@ class MainWindow(QMainWindow):
             return f"Removed {change.count} {content_type_name.lower()}"
 
         return "Content changed"
+
+    @staticmethod
+    def _is_menu_widget(widget: QWidget) -> bool:
+        """Return whether the widget belongs to an application menu."""
+        current_widget: QWidget | None = widget
+
+        while current_widget is not None:
+            if isinstance(current_widget, (QMenu, QMenuBar)):
+                return True
+
+            current_widget = current_widget.parentWidget()
+
+        return False
+
+    @staticmethod
+    def _find_parent_table(widget: QWidget) -> QTableView | None:
+        """Return the table containing the specified widget."""
+        current_widget: QWidget | None = widget
+
+        while current_widget is not None:
+            if isinstance(current_widget, QTableView):
+                return current_widget
+
+            current_widget = current_widget.parentWidget()
+
+        return None
+
+    def _clear_table_selections(self, excluded_table: QTableView | None = None) -> None:
+        """Clear selections in content tables except the specified table."""
+        for table in self.findChildren(QTableView):
+            if table is excluded_table:
+                continue
+
+            table.selectionModel().clearSelection()

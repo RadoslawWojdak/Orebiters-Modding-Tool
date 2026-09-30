@@ -3,7 +3,15 @@ from typing import Any
 
 from PySide6.QtCore import QAbstractProxyModel, QModelIndex, Qt, Signal
 from PySide6.QtGui import QAction, QFont, QIcon, QKeySequence
-from PySide6.QtWidgets import QLabel, QLineEdit, QStackedLayout, QToolBar, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QStackedLayout,
+    QToolBar,
+    QVBoxLayout,
+    QWidget,
+)
 
 from orebiters_modding_tool.app.models.content_table_model import ContentTableModel
 from orebiters_modding_tool.app.models.table_sort_filter_proxy_model import (
@@ -24,8 +32,7 @@ class ContentOverviewConfig:
 class ContentOverviewWidget[T: Content[Any]](QWidget):
     """Content overview displayed in the workspace."""
 
-    TITLE_FONT_SIZE = 24
-    TITLE_CONTENT_SPACING = 24
+    TITLE_FONT_SIZE = 20
     MESSAGE_FONT_SIZE = 12
 
     add_requested = Signal(ContentReference)
@@ -90,20 +97,20 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         """Set up the content overview layout."""
         layout = QVBoxLayout(self)
 
-        layout.addStretch()
-        layout.addWidget(self._create_title_label())
-        layout.addSpacing(self.TITLE_CONTENT_SPACING)
+        header_layout = QHBoxLayout()
+        header_layout.addWidget(self._create_title_label())
+        header_layout.addStretch()
 
         self._toolbar = self._create_toolbar()
-        layout.addWidget(self._toolbar)
+        header_layout.addWidget(self._toolbar)
+
+        layout.addLayout(header_layout)
 
         self._filter_edit = self._create_filter_edit()
         layout.addWidget(self._filter_edit)
 
         self._content_layout = self._create_content_layout()
-        layout.addLayout(self._content_layout)
-
-        layout.addStretch()
+        layout.addLayout(self._content_layout, 1)
 
     def _create_toolbar(self) -> QToolBar:
         """Create the local content toolbar.
@@ -183,7 +190,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         return [self._get_item_from_view_index(index) for index in selection_model.selectedRows()]
 
     def _get_item_from_view_index(self, index: QModelIndex) -> T:
-        """Return the item represented by a view index.
+        """Return the item represented by the view index.
 
         :param index: View index of the item.
         :returns: Content item represented by the index.
@@ -268,7 +275,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         :returns: Configured title label.
         """
         title_label = QLabel(self._config.title, self)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
 
         font = QFont(title_label.font())
         font.setPointSize(self.TITLE_FONT_SIZE)
@@ -279,7 +286,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         return title_label
 
     def _create_message_label(self) -> QLabel:
-        """Create the empty content message label.
+        """Create the content overview empty message label.
 
         :returns: Configured empty content message label.
         """
