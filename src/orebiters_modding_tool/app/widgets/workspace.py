@@ -66,6 +66,7 @@ class Workspace(QWidget):
         """Set up the workspace tab widget."""
         self._tab_widget = QTabWidget(self)
         self._tab_widget.setTabsClosable(True)
+        self._tab_widget.setMovable(True)
         self._tab_widget.tabCloseRequested.connect(self._close_tab)
         self._tab_widget.currentChanged.connect(self._refresh_current_tab)
 
