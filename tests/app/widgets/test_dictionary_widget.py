@@ -140,6 +140,33 @@ def test_item_widgets_are_added_to_stacked_widget(qapp: QApplication) -> None:
     assert widget._stacked_widget.indexOf(second_widget) == 1
 
 
+def test_first_item_is_displayed_by_default(qapp: QApplication) -> None:
+    """Display the first item when the widget is created."""
+    widget = DictionaryWidget(
+        item_widget_factory=lambda value: QLabel(str(value)),
+        items={
+            "first": "First value",
+            "second": "Second value",
+        },
+    )
+
+    assert widget._stacked_widget.currentWidget() is widget._item_widgets["first"]
+
+
+def test_first_item_button_is_checked_by_default(qapp: QApplication) -> None:
+    """Check the button associated with the initially displayed item."""
+    widget = DictionaryWidget(
+        item_widget_factory=lambda value: QLabel(str(value)),
+        items={
+            "first": "First value",
+            "second": "Second value",
+        },
+    )
+
+    assert widget._item_buttons["first"].isChecked()
+    assert not widget._item_buttons["second"].isChecked()
+
+
 def test_show_item_displays_widget_for_given_key(qapp: QApplication) -> None:
     """Display the item widget associated with the given key."""
     widget = DictionaryWidget(
@@ -155,6 +182,22 @@ def test_show_item_displays_widget_for_given_key(qapp: QApplication) -> None:
     assert widget._stacked_widget.currentWidget() is widget._item_widgets["second"]
 
 
+def test_show_item_updates_checked_item_button(qapp: QApplication) -> None:
+    """Check the button associated with the displayed item."""
+    widget = DictionaryWidget(
+        item_widget_factory=lambda value: QLabel(str(value)),
+        items={
+            "first": "First value",
+            "second": "Second value",
+        },
+    )
+
+    widget.show_item("second")
+
+    assert widget._item_buttons["second"].isChecked()
+    assert not widget._item_buttons["first"].isChecked()
+
+
 def test_item_button_displays_associated_widget(qapp: QApplication) -> None:
     """Display the associated item widget when an item button is clicked."""
     widget = DictionaryWidget(
@@ -168,6 +211,22 @@ def test_item_button_displays_associated_widget(qapp: QApplication) -> None:
     widget._item_buttons["second"].click()
 
     assert widget._stacked_widget.currentWidget() is widget._item_widgets["second"]
+
+
+def test_item_button_updates_checked_state(qapp: QApplication) -> None:
+    """Update checked states when an item button is clicked."""
+    widget = DictionaryWidget(
+        item_widget_factory=lambda value: QLabel(str(value)),
+        items={
+            "first": "First value",
+            "second": "Second value",
+        },
+    )
+
+    widget._item_buttons["second"].click()
+
+    assert widget._item_buttons["second"].isChecked()
+    assert not widget._item_buttons["first"].isChecked()
 
 
 def test_show_item_raises_key_error_for_unknown_key(qapp: QApplication) -> None:
@@ -197,3 +256,4 @@ def test_creates_empty_dictionary_widget(qapp: QApplication) -> None:
 
     assert widget._item_buttons_layout.count() == 0
     assert widget._stacked_widget.count() == 0
+    assert widget._stacked_widget.currentWidget() is None

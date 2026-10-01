@@ -1,3 +1,4 @@
+import copy
 from collections.abc import Callable, Sequence
 from dataclasses import replace
 from enum import Enum
@@ -81,8 +82,16 @@ class BaseEditorWidget[T](QWidget):
         """Return the edited item."""
         return self._item
 
-    def save(self) -> None:
-        """Save the current editor state to the edited item."""
+    @property
+    def has_unsaved_changes(self) -> bool:
+        """Return whether the editor contains unsaved changes."""
+        return self.build_edited_item() != self._item
+
+    def build_edited_item(self) -> T:
+        """Build a copy of the item using the current widget values.
+
+        :returns: Item containing the current editor values.
+        """
         values: dict[str, object] = {}
 
         for field_config, widget in zip(self.FIELDS, self._widgets, strict=True):
@@ -92,9 +101,16 @@ class BaseEditorWidget[T](QWidget):
 
             self._collect_field_value(field_config, widget, values)
 
-        for name, value in values.items():
-            setattr(self._item, name, value)
+        edited_item = copy.deepcopy(self._item)
 
+        for field_name, value in values.items():
+            setattr(edited_item, field_name, value)
+
+        return edited_item
+
+    def save(self) -> None:
+        """Save the edited values into the original item."""
+        self._save_values()
         self.saved.emit()
 
     def refresh(self) -> None:
@@ -233,7 +249,7 @@ class BaseEditorWidget[T](QWidget):
         """Create the editor page for a variant.
 
         :param variant_field_config: Variant field configuration.
-        :param variant: Variant configuration.
+        :param variant: Variant definition.
         :returns: Variant page and its field widgets.
         """
         page = QWidget(self)
@@ -276,7 +292,7 @@ class BaseEditorWidget[T](QWidget):
         """Validate a variant index.
 
         :param field_config: Variant field configuration.
-        :param index: Variant index to validate.
+        :param index: Selected variant index.
         :raises ValueError: If the index is invalid.
         """
         if type(index) is not int or not 0 <= index < len(field_config.variants):
@@ -342,26 +358,37 @@ class BaseEditorWidget[T](QWidget):
         field_config: EditorField,
         widget: QWidget,
         values: dict[str, object],
+        *,
+        save_nested: bool = False,
     ) -> None:
         """Collect an editable field value.
 
         :param field_config: Field configuration.
         :param widget: Field widget.
         :param values: Dictionary receiving collected values.
+        :param save_nested: Whether to save nested editors into original objects.
         """
-        if field_config.read_only:
+        if field_config.read_only or field_config.value_provider is not None:
             return
 
-        if field_config.value_provider is not None:
-            return
+        values[field_config.name] = self._get_field_value_for_save(
+            widget,
+            field_config.value_type,
+            save_nested=save_nested,
+        )
 
-        values[field_config.name] = self._get_field_value_for_save(widget, field_config.value_type)
-
-    def _collect_variant_values(self, widget: QWidget, values: dict[str, object]) -> None:
+    def _collect_variant_values(
+        self,
+        widget: QWidget,
+        values: dict[str, object],
+        *,
+        save_nested: bool = False,
+    ) -> None:
         """Collect values from the active variant.
 
         :param widget: Variant widget.
         :param values: Dictionary receiving collected values.
+        :param save_nested: Whether to save nested editors into original objects.
         :raises TypeError: If the widget is not a VariantWidget.
         """
         if not isinstance(widget, VariantWidget):
@@ -374,7 +401,12 @@ class BaseEditorWidget[T](QWidget):
         variant, variant_widgets = payload
 
         for field_config in variant.fields:
-            self._collect_field_value(field_config, variant_widgets[field_config.name], values)
+            self._collect_field_value(
+                field_config,
+                variant_widgets[field_config.name],
+                values,
+                save_nested=save_nested,
+            )
 
     # =========================================================================
     # Field creation
@@ -479,7 +511,7 @@ class BaseEditorWidget[T](QWidget):
     def _create_str_field(self, value: str) -> QLineEdit:
         """Create an editor for a string field.
 
-        :param value: Current field value.
+        :param value: Initial text.
         :returns: Text editor widget.
         """
         return QLineEdit(value, self)
@@ -487,7 +519,7 @@ class BaseEditorWidget[T](QWidget):
     def _create_int_field(self, value: int) -> QSpinBox:
         """Create an editor for an integer field.
 
-        :param value: Current field value.
+        :param value: Initial value.
         :returns: Integer editor widget.
         """
         field = QSpinBox(self)
@@ -499,7 +531,7 @@ class BaseEditorWidget[T](QWidget):
     def _create_float_field(self, value: float) -> QDoubleSpinBox:
         """Create an editor for a floating-point field.
 
-        :param value: Current field value.
+        :param value: Initial value.
         :returns: Floating-point editor widget.
         """
         field = QDoubleSpinBox(self)
@@ -515,11 +547,11 @@ class BaseEditorWidget[T](QWidget):
     ) -> QLineEdit:
         """Create an editor for an optional numeric value.
 
-        :param value: Current field value.
+        :param value: Initial value.
+        :param value_type: Expected numeric type.
         :returns: Text editor widget.
         """
         field = QLineEdit("" if value is None else str(value), self)
-
         field.setPlaceholderText("Integer or empty" if value_type is int else "Number or empty")
 
         return field
@@ -527,7 +559,7 @@ class BaseEditorWidget[T](QWidget):
     def _create_bool_field(self, value: bool) -> QCheckBox:
         """Create an editor for a boolean field.
 
-        :param value: Current field value.
+        :param value: Initial value.
         :returns: Boolean editor widget.
         """
         field = QCheckBox(self)
@@ -538,7 +570,7 @@ class BaseEditorWidget[T](QWidget):
     def _create_enum_field(self, value: Enum) -> QComboBox:
         """Create an editor for an enum value.
 
-        :param value: Current field value.
+        :param value: Initial enum value.
         :returns: Enum editor widget.
         """
         return self._create_enum_type_field(type(value), value)
@@ -547,7 +579,7 @@ class BaseEditorWidget[T](QWidget):
         """Create an editor for an enum type.
 
         :param enum_type: Enum type.
-        :param value: Current field value.
+        :param value: Current value.
         :returns: Enum editor widget.
         """
         field = QComboBox(self)
@@ -636,7 +668,6 @@ class BaseEditorWidget[T](QWidget):
             return field_config.item_factory(self._context)
 
         field_type = self._get_field_annotation(field_config.name)
-
         item_type = self._get_list_item_type(field_type)
 
         if item_type is None:
@@ -699,22 +730,46 @@ class BaseEditorWidget[T](QWidget):
     # Saving
     # =========================================================================
 
-    def _get_field_value_for_save(self, field: QWidget, value_type: object = None) -> object:
+    def _save_values(self) -> None:
+        """Save current widget values into the original item."""
+        values: dict[str, object] = {}
+
+        for field_config, widget in zip(self.FIELDS, self._widgets, strict=True):
+            if isinstance(field_config, EditorVariantField):
+                self._collect_variant_values(widget, values, save_nested=True)
+                continue
+
+            self._collect_field_value(field_config, widget, values, save_nested=True)
+
+        for name, value in values.items():
+            setattr(self._item, name, value)
+
+    def _get_field_value_for_save(
+        self,
+        field: QWidget,
+        value_type: object = None,
+        *,
+        save_nested: bool = False,
+    ) -> object:
         """Get the value represented by an editor widget.
 
         :param field: Editor widget.
         :param value_type: Expected field type.
+        :param save_nested: Whether to save nested editors into original objects.
         :returns: Value represented by the widget.
         :raises ValueError: If the value cannot be converted.
         """
         if isinstance(field, ListWidget):
-            return self._get_list_value_for_save(field)
+            return self._get_list_value_for_save(field, save_nested=save_nested)
 
         if isinstance(field, DictionaryWidget):
-            return self._get_dictionary_value_for_save(field)
+            return self._get_dictionary_value_for_save(field, save_nested=save_nested)
 
         if isinstance(field, BaseEditorWidget):
-            return self._save_nested_editor(field)
+            if save_nested:
+                return self._save_nested_editor_item(field)
+
+            return self._build_nested_editor_item(field)
 
         value = self._get_base_widget_value(field)
 
@@ -739,36 +794,37 @@ class BaseEditorWidget[T](QWidget):
 
         return value
 
-    @staticmethod
-    def _save_nested_editor(editor: BaseEditorWidget[object]) -> object:
-        """Save a nested editor and return its edited item.
-
-        :param editor: Nested editor widget to save.
-        :returns: Item edited by the nested editor.
-        """
-        editor.save()
-        return editor.item
-
-    def _get_list_value_for_save(self, widget: ListWidget) -> list[object]:
-        """Get values from a list widget for saving.
-
-        Nested editor widgets are saved while their values are collected.
+    def _get_list_value_for_save(
+        self,
+        widget: ListWidget,
+        *,
+        save_nested: bool = False,
+    ) -> list[object]:
+        """Get current values from a list widget.
 
         :param widget: List widget containing item editor widgets.
+        :param save_nested: Whether to save nested editors into original objects.
         :returns: Current list values.
         """
-        return [self._get_field_value_for_save(item_widget) for item_widget in widget._item_widgets]
+        return [
+            self._get_field_value_for_save(item_widget, save_nested=save_nested)
+            for item_widget in widget._item_widgets
+        ]
 
-    def _get_dictionary_value_for_save(self, widget: DictionaryWidget) -> dict[object, object]:
-        """Get values from a dictionary widget for saving.
+    def _get_dictionary_value_for_save(
+        self,
+        widget: DictionaryWidget,
+        *,
+        save_nested: bool = False,
+    ) -> dict[object, object]:
+        """Get current values from a dictionary widget.
 
-        Nested editor widgets are saved while their values are collected.
-
-        :param widget: Dictionary widget containing item editor widgets.
+        :param widget: Dictionary widget containing value editor widgets.
+        :param save_nested: Whether to save nested editors into original objects.
         :returns: Current dictionary values.
         """
         return {
-            key: self._get_field_value_for_save(item_widget)
+            key: self._get_field_value_for_save(item_widget, save_nested=save_nested)
             for key, item_widget in widget._item_widgets.items()
         }
 
@@ -796,6 +852,25 @@ class BaseEditorWidget[T](QWidget):
             return field.currentData()
 
         raise ValueError(f"Unsupported editor widget type: {type(field).__name__}.")
+
+    @staticmethod
+    def _build_nested_editor_item(editor: BaseEditorWidget[object]) -> object:
+        """Build the current item from a nested editor without saving it.
+
+        :param editor: Nested editor widget.
+        :returns: Item containing the current editor values.
+        """
+        return editor.build_edited_item()
+
+    @staticmethod
+    def _save_nested_editor_item(editor: BaseEditorWidget[object]) -> object:
+        """Save a nested editor into its original item.
+
+        :param editor: Nested editor widget.
+        :returns: Original item containing the saved values.
+        """
+        editor._save_values()
+        return editor.item
 
     # =========================================================================
     # Type helpers
