@@ -1,17 +1,22 @@
 import json
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QAction, QCloseEvent, QIcon, QKeySequence
 from PySide6.QtWidgets import (
+    QApplication,
     QDialog,
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMenu,
+    QMenuBar,
     QMessageBox,
     QStatusBar,
     QStyle,
+    QTableView,
     QToolBar,
+    QWidget,
 )
 
 from orebiters_modding_tool.app.dialogs.new_project_dialog import NewProjectDialog
@@ -38,7 +43,6 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self._project_service = project_service
-        self._project_exit_guard = ProjectExitGuard(self._project_service, self)
 
         self.setWindowTitle("Orebiters Modding Tool")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
@@ -50,7 +54,26 @@ class MainWindow(QMainWindow):
         self._setup_toolbar()
         self._setup_status_bar()
 
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
+
         self._update_project_actions()
+
+        self._project_exit_guard = ProjectExitGuard(self._project_service, self._workspace, self)
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:
+        """Handle events within the main window."""
+        if not isinstance(watched, QWidget):
+            return super().eventFilter(watched, event)
+
+        if watched.window() is not self:
+            return super().eventFilter(watched, event)
+
+        if event.type() is QEvent.Type.MouseButtonPress:
+            self._handle_mouse_press(watched)
+
+        return super().eventFilter(watched, event)
 
     def closeEvent(self, event: QCloseEvent) -> None:
         """Handle the main window close request.
@@ -119,24 +142,6 @@ class MainWindow(QMainWindow):
             icon=style.standardIcon(QStyle.StandardPixmap.SP_ArrowForward),
         )
         self._redo_action.setEnabled(False)
-        self._cut_action = self._create_action(
-            "Cut",
-            self._cut,
-            shortcut=QKeySequence.StandardKey.Cut,
-        )
-        self._cut_action.setEnabled(False)
-        self._copy_action = self._create_action(
-            "Copy",
-            self._copy,
-            shortcut=QKeySequence.StandardKey.Copy,
-        )
-        self._copy_action.setEnabled(False)
-        self._paste_action = self._create_action(
-            "Paste",
-            self._paste,
-            shortcut=QKeySequence.StandardKey.Paste,
-        )
-        self._paste_action.setEnabled(False)
 
         # Help Actions
         self._show_documentation_action = self._create_action(
@@ -174,10 +179,9 @@ class MainWindow(QMainWindow):
         edit_menu = menu_bar.addMenu("Edit")
         edit_menu.addAction(self._undo_action)
         edit_menu.addAction(self._redo_action)
-        edit_menu.addSeparator()
-        edit_menu.addAction(self._cut_action)
-        edit_menu.addAction(self._copy_action)
-        edit_menu.addAction(self._paste_action)
+
+        view_menu = menu_bar.addMenu("View")
+        view_menu.addAction(self._project_explorer_action)
 
         help_menu = menu_bar.addMenu("Help")
         help_menu.addAction(self._show_documentation_action)
@@ -215,7 +219,21 @@ class MainWindow(QMainWindow):
 
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, self._project_explorer)
 
+        self._project_explorer_action = self._project_explorer.toggleViewAction()
+        self._project_explorer_action.setText("Project Explorer")
+
         self._project_explorer.content_open_requested.connect(self._open_content)
+
+    def _handle_mouse_press(self, watched: QWidget) -> None:
+        """Handle mouse presses within the main window.
+
+        :param watched: Widget that received the event.
+        """
+        if self._is_menu_widget(watched):
+            return
+
+        clicked_table = self._find_parent_table(watched)
+        self._clear_table_selections(excluded_table=clicked_table)
 
     def _on_workspace_content_changed(self, change: ContentChange) -> None:
         """Handle content changes reported by the workspace."""
@@ -234,7 +252,7 @@ class MainWindow(QMainWindow):
         """Create and configure an application action.
 
         :param text: Text displayed for the action.
-        :param handler: Callback executed when the action is triggered.
+        :param handler: Callback executed for the action.
         :param shortcut: Optional keyboard shortcut.
         :param icon: Optional action icon.
         :returns: Configured application action.
@@ -367,18 +385,6 @@ class MainWindow(QMainWindow):
         """Redo the previously undone action."""
         pass
 
-    def _cut(self) -> None:
-        """Cut the selected content."""
-        pass
-
-    def _copy(self) -> None:
-        """Copy the selected content."""
-        pass
-
-    def _paste(self) -> None:
-        """Paste content from the clipboard."""
-        pass
-
     def _show_documentation(self) -> None:
         """Show the application documentation."""
         pass
@@ -449,7 +455,8 @@ class MainWindow(QMainWindow):
 
         self._project_statistics_label.setText(" | ".join(statistics))
 
-    def _format_content_change(self, change: ContentChange) -> str:
+    @staticmethod
+    def _format_content_change(change: ContentChange) -> str:
         """Format a content change for the status bar."""
         if change.change_type is ContentChangeType.CREATED:
             return f"Created {change.content_name}"
@@ -466,3 +473,37 @@ class MainWindow(QMainWindow):
             return f"Removed {change.count} {content_type_name.lower()}"
 
         return "Content changed"
+
+    @staticmethod
+    def _is_menu_widget(widget: QWidget) -> bool:
+        """Return whether the widget belongs to an application menu."""
+        current_widget: QWidget | None = widget
+
+        while current_widget is not None:
+            if isinstance(current_widget, (QMenu, QMenuBar)):
+                return True
+
+            current_widget = current_widget.parentWidget()
+
+        return False
+
+    @staticmethod
+    def _find_parent_table(widget: QWidget) -> QTableView | None:
+        """Return the table containing the specified widget."""
+        current_widget: QWidget | None = widget
+
+        while current_widget is not None:
+            if isinstance(current_widget, QTableView):
+                return current_widget
+
+            current_widget = current_widget.parentWidget()
+
+        return None
+
+    def _clear_table_selections(self, excluded_table: QTableView | None = None) -> None:
+        """Clear selections in content tables except the specified table."""
+        for table in self.findChildren(QTableView):
+            if table is excluded_table:
+                continue
+
+            table.selectionModel().clearSelection()

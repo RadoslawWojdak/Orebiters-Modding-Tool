@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import cast
 
 import pytest
 from PySide6.QtCore import Qt
@@ -16,6 +17,7 @@ from PySide6.QtWidgets import (
     QSpinBox,
     QWidget,
 )
+from pytestqt.qtbot import QtBot
 
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
 from orebiters_modding_tool.app.editors.editor_field import (
@@ -1209,25 +1211,182 @@ def test_save_updates_nested_dictionary_values(qapp: QApplication) -> None:
 
     editor.save()
 
-    assert item.mapping == {
-        "first": first_value,
-        "second": second_value,
-    }
+    assert item.mapping["first"] is first_value
+    assert item.mapping["second"] is second_value
     assert first_value.text == "updated first"
     assert second_value.text == "updated second"
 
 
-def test_save_emits_saved_signal(qapp: QApplication) -> None:
+def test_save_emits_saved_signal(qtbot: QtBot) -> None:
     """Emit the saved signal after saving."""
     editor = BasicFieldsEditorWidget(SampleItem())
+    qtbot.addWidget(editor)
 
-    saved_emissions: list[None] = []
+    with qtbot.waitSignal(editor.saved):
+        editor.save()
 
-    editor.saved.connect(lambda: saved_emissions.append(None))
 
+# ============================================================================
+# Building edited items and unsaved changes
+# ============================================================================
+
+
+def test_build_edited_item_returns_modified_copy(qtbot: QtBot) -> None:
+    """Build an edited copy without modifying the original item."""
+    item = SampleItem(text="Original text", number=42)
+    editor = BasicFieldsEditorWidget(item)
+    qtbot.addWidget(editor)
+
+    text_field = editor._get_field_widget("text")
+    number_field = editor._get_field_widget("number")
+    assert isinstance(text_field, QLineEdit)
+    assert isinstance(number_field, QSpinBox)
+
+    text_field.setText("Updated text")
+    number_field.setValue(123)
+
+    edited_item = editor.build_edited_item()
+
+    assert edited_item is not item
+    assert edited_item.text == "Updated text"
+    assert edited_item.number == 123
+    assert item.text == "Original text"
+    assert item.number == 42
+
+
+def test_build_edited_item_does_not_modify_nested_dictionary_values(qtbot: QtBot) -> None:
+    """Build nested edited copies without mutating original nested items."""
+    first_value = SampleItem(text="first")
+    second_value = SampleItem(text="second")
+    item = SampleItem(mapping={"first": first_value, "second": second_value})
+    editor = NestedDictionaryEditorWidget(item)
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("mapping")
+    assert isinstance(field, DictionaryWidget)
+
+    first_editor = field._item_widgets["first"]
+    second_editor = field._item_widgets["second"]
+    assert isinstance(first_editor, NestedItemEditorWidget)
+    assert isinstance(second_editor, NestedItemEditorWidget)
+
+    first_text = first_editor._get_field_widget("text")
+    second_text = second_editor._get_field_widget("text")
+    assert isinstance(first_text, QLineEdit)
+    assert isinstance(second_text, QLineEdit)
+    first_text.setText("updated first")
+    second_text.setText("updated second")
+
+    edited_item = editor.build_edited_item()
+
+    assert edited_item is not item
+    assert edited_item.mapping is not item.mapping
+    assert edited_item.mapping["first"] is not first_value
+    assert edited_item.mapping["second"] is not second_value
+    assert cast(SampleItem, edited_item.mapping["first"]).text == "updated first"
+    assert cast(SampleItem, edited_item.mapping["second"]).text == "updated second"
+    assert first_value.text == "first"
+    assert second_value.text == "second"
+
+
+def test_has_unsaved_changes_is_false_initially(qtbot: QtBot) -> None:
+    """Report no unsaved changes when editor fields match the model."""
+    editor = BasicFieldsEditorWidget(SampleItem(optional_value=""))
+    qtbot.addWidget(editor)
+
+    assert editor.has_unsaved_changes is False
+
+
+def test_has_unsaved_changes_is_true_after_modification(qtbot: QtBot) -> None:
+    """Report unsaved changes after a field is modified."""
+    editor = BasicFieldsEditorWidget(SampleItem(optional_value=""))
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("text")
+    assert isinstance(field, QLineEdit)
+    field.setText("Updated text")
+
+    assert editor.has_unsaved_changes is True
+
+
+def test_has_unsaved_changes_detects_nested_dictionary_changes(qtbot: QtBot) -> None:
+    """Detect changes made in nested dictionary editors."""
+    item = SampleItem(
+        optional_value="",
+        mapping={"first": SampleItem(optional_value="", text="first")},
+    )
+    editor = NestedDictionaryEditorWidget(item)
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("mapping")
+    assert isinstance(field, DictionaryWidget)
+    nested_editor = field._item_widgets["first"]
+    assert isinstance(nested_editor, NestedItemEditorWidget)
+
+    text_field = nested_editor._get_field_widget("text")
+    assert isinstance(text_field, QLineEdit)
+    text_field.setText("updated")
+
+    assert editor.has_unsaved_changes is True
+    assert cast(SampleItem, item.mapping["first"]).text == "first"
+
+
+def test_checking_has_unsaved_changes_does_not_modify_nested_objects(qtbot) -> None:
+    """Keep nested model objects unchanged while checking dirty state."""
+    nested_item = SampleItem(optional_value="", text="original")
+    item = SampleItem(optional_value="", mapping={"nested": nested_item})
+    editor = NestedDictionaryEditorWidget(item)
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("mapping")
+    assert isinstance(field, DictionaryWidget)
+    nested_editor = field._item_widgets["nested"]
+    assert isinstance(nested_editor, NestedItemEditorWidget)
+
+    text_field = nested_editor._get_field_widget("text")
+    assert isinstance(text_field, QLineEdit)
+    text_field.setText("updated")
+
+    assert editor.has_unsaved_changes is True
+    assert editor.has_unsaved_changes is True
+    assert nested_item.text == "original"
+
+
+def test_has_unsaved_changes_is_false_after_save(qtbot) -> None:
+    """Clear the unsaved-changes state after saving."""
+    editor = BasicFieldsEditorWidget(SampleItem(optional_value=""))
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("text")
+    assert isinstance(field, QLineEdit)
+    field.setText("Updated text")
+
+    assert editor.has_unsaved_changes is True
     editor.save()
+    assert editor.has_unsaved_changes is False
 
-    assert len(saved_emissions) == 1
+
+def test_saving_parent_does_not_emit_nested_saved_signal(qtbot) -> None:
+    """Emit saved only for the editor explicitly saved by the caller."""
+    item = SampleItem(optional_value="", mapping={"nested": SampleItem(text="original")})
+    editor = NestedDictionaryEditorWidget(item)
+    qtbot.addWidget(editor)
+
+    field = editor._get_field_widget("mapping")
+    assert isinstance(field, DictionaryWidget)
+    nested_editor = field._item_widgets["nested"]
+    assert isinstance(nested_editor, NestedItemEditorWidget)
+
+    parent_emissions: list[None] = []
+    nested_emissions: list[None] = []
+    editor.saved.connect(lambda: parent_emissions.append(None))
+    nested_editor.saved.connect(lambda: nested_emissions.append(None))
+
+    with qtbot.waitSignal(editor.saved):
+        editor.save()
+
+    assert len(parent_emissions) == 1
+    assert nested_emissions == []
 
 
 # ============================================================================

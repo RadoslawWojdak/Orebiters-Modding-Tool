@@ -1,12 +1,56 @@
 from unittest.mock import Mock, patch
 
-from PySide6.QtGui import QCloseEvent, QKeySequence
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent, QKeySequence, QStandardItem, QStandardItemModel
+from PySide6.QtWidgets import (
+    QApplication,
+    QDialog,
+    QLabel,
+    QMessageBox,
+    QTableView,
+    QVBoxLayout,
+    QWidget,
+)
+from pytestqt.qtbot import QtBot
 
 from orebiters_modding_tool.app.events.content import ContentChange, ContentChangeType
 from orebiters_modding_tool.app.main_window import MainWindow
 from orebiters_modding_tool.domain.content import ContentReference, ContentType
 from orebiters_modding_tool.services.project_service import ProjectService
+
+# =============================================================================
+# Test Helpers
+# =============================================================================
+
+
+def create_selection_test_ui(window: MainWindow) -> tuple[QTableView, QLabel]:
+    """Create a table and a label outside the table for selection tests."""
+    central_widget = QWidget()
+    layout = QVBoxLayout(central_widget)
+
+    table = QTableView()
+    model = QStandardItemModel(2, 1, table)
+    model.setHorizontalHeaderLabels(["Name"])
+    model.setItem(0, 0, QStandardItem("First row"))
+    model.setItem(1, 0, QStandardItem("Second row"))
+    model.setItem(2, 0, QStandardItem("Third row"))
+
+    table.setModel(model)
+    table.setSelectionBehavior(QTableView.SelectionBehavior.SelectRows)
+    table.setSelectionMode(QTableView.SelectionMode.SingleSelection)
+
+    label = QLabel("Outside the table")
+    layout.addWidget(table)
+    layout.addWidget(label)
+
+    window.setCentralWidget(central_widget)
+
+    return table, label
+
+
+# =============================================================================
+# Main Window Initialization and Actions
+# =============================================================================
 
 
 def test_initializes_main_window(
@@ -41,6 +85,11 @@ def test_create_action_configures_action(
     handler.assert_called_once()
 
 
+# =============================================================================
+# Content Navigation
+# =============================================================================
+
+
 def test_open_content_shows_message_without_active_project(
     project_service: ProjectService,
     materials_category_reference: ContentReference,
@@ -73,6 +122,11 @@ def test_open_content_delegates_to_workspace(
         window._open_content(materials_category_reference)
 
     open_content.assert_called_once_with(materials_category_reference)
+
+
+# =============================================================================
+# Project State and Saving
+# =============================================================================
 
 
 def test_set_active_project_updates_window(
@@ -134,6 +188,36 @@ def test_save_project_does_not_report_success_when_saving_fails(
     refresh_state.assert_not_called()
     assert window.statusBar().currentMessage() == ""
     assert window._project_status_label.text() == "Unsaved project changes"
+
+
+def test_update_project_actions_enables_save_for_active_project(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Enable project-dependent actions when a project is active."""
+    project_service.create_project("orebiters", "test")
+    window = MainWindow(project_service)
+
+    window._update_project_actions()
+
+    assert window._save_action.isEnabled()
+
+
+def test_update_project_actions_disables_save_without_active_project(
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Disable project-dependent actions when no project is active."""
+    window = MainWindow(project_service)
+
+    window._update_project_actions()
+
+    assert not window._save_action.isEnabled()
+
+
+# =============================================================================
+# Opening Projects
+# =============================================================================
 
 
 def test_open_project_shows_message_when_no_projects_exist(
@@ -367,29 +451,9 @@ def test_open_project_shows_error_when_opening_project_fails(
     assert project_service.active_project.qualified_id == first_project.qualified_id
 
 
-def test_update_project_actions_enables_save_for_active_project(
-    project_service: ProjectService,
-    qapp: QApplication,
-) -> None:
-    """Enable project-dependent actions when a project is active."""
-    project_service.create_project("orebiters", "test")
-    window = MainWindow(project_service)
-
-    window._update_project_actions()
-
-    assert window._save_action.isEnabled()
-
-
-def test_update_project_actions_disables_save_without_active_project(
-    project_service: ProjectService,
-    qapp: QApplication,
-) -> None:
-    """Disable project-dependent actions when no project is active."""
-    window = MainWindow(project_service)
-
-    window._update_project_actions()
-
-    assert not window._save_action.isEnabled()
+# =============================================================================
+# Creating Projects
+# =============================================================================
 
 
 @patch(
@@ -486,6 +550,11 @@ def test_new_project_cancels_when_user_cancels_unsaved_changes(
     assert project_service.active_project.qualified_id == existing_project.qualified_id
 
 
+# =============================================================================
+# Closing the Main Window
+# =============================================================================
+
+
 @patch(
     "orebiters_modding_tool.app.main_window.QMessageBox.question",
     return_value=QMessageBox.StandardButton.Yes,
@@ -553,6 +622,70 @@ def test_close_event_ignores_event_when_user_cancels(
 
     save_project.assert_not_called()
     assert not event.isAccepted()
+
+
+# =============================================================================
+# Table Selection
+# =============================================================================
+
+
+def test_clicking_outside_table_clears_selection(
+    project_service: ProjectService,
+    qtbot: QtBot,
+) -> None:
+    """Clear the visible row selection after clicking outside the table."""
+    window = MainWindow(project_service)
+    table, label = create_selection_test_ui(window)
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitExposed(window)
+
+    index = table.model().index(1, 0)
+    qtbot.mouseClick(
+        table.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=table.visualRect(index).center(),
+    )
+
+    assert table.selectionModel().selectedRows() == [index]
+
+    qtbot.mouseClick(label, Qt.MouseButton.LeftButton)
+
+    assert table.selectionModel().selectedRows() == []
+    assert table.currentIndex() == index
+
+
+def test_down_moves_selection_after_clicking_outside_table(
+    project_service: ProjectService,
+    qtbot: QtBot,
+) -> None:
+    """Move the selection down after clicking outside the table."""
+    window = MainWindow(project_service)
+    table, label = create_selection_test_ui(window)
+    qtbot.addWidget(window)
+    window.show()
+    qtbot.waitExposed(window)
+
+    index = table.model().index(1, 0)
+    next_index = table.model().index(2, 0)
+
+    qtbot.mouseClick(
+        table.viewport(),
+        Qt.MouseButton.LeftButton,
+        pos=table.visualRect(index).center(),
+    )
+
+    assert table.selectionModel().selectedRows() == [index]
+
+    qtbot.mouseClick(label, Qt.MouseButton.LeftButton)
+
+    assert table.selectionModel().selectedRows() == []
+    assert table.currentIndex() == index
+
+    qtbot.keyClick(table, Qt.Key.Key_Down)
+
+    assert table.currentIndex() == next_index
+    assert table.selectionModel().selectedRows() == [next_index]
 
 
 # =============================================================================
