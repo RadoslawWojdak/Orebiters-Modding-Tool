@@ -43,7 +43,6 @@ class MainWindow(QMainWindow):
         super().__init__()
 
         self._project_service = project_service
-        self._project_exit_guard = ProjectExitGuard(self._project_service, self)
 
         self.setWindowTitle("Orebiters Modding Tool")
         self.resize(self.DEFAULT_WIDTH, self.DEFAULT_HEIGHT)
@@ -60,6 +59,8 @@ class MainWindow(QMainWindow):
             app.installEventFilter(self)
 
         self._update_project_actions()
+
+        self._project_exit_guard = ProjectExitGuard(self._project_service, self._workspace, self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         """Handle events within the main window."""

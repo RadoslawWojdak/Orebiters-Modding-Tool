@@ -113,6 +113,17 @@ class Content[TLocalization: ContentLocalization]:
         """
         return cls._registry[content_type]
 
+    def get_display_name(self, language: str) -> str:
+        """Return the content name in the specified language.
+
+        :param language: Language code.
+        :returns: Localized content name or content ID.
+        """
+        localization = self.localizations.get(language)
+        lang_name = localization.one if localization else ""
+
+        return lang_name or self.id.replace("_", " ")
+
     def get_qualified_id(self, mod_qualified_id: str) -> str:
         """Build a fully qualified content ID.
 

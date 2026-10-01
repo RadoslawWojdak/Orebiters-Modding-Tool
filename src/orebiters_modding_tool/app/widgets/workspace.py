@@ -45,17 +45,17 @@ class Workspace(QWidget):
         if isinstance(widget, ContentOverviewWidget):
             widget.refresh_content_states()
 
+    def confirm_project_tabs_close(self) -> bool:
+        """Confirm closing project tabs with unsaved changes.
+
+        :returns: True if all project tabs can be closed.
+        """
+        return all(self._confirm_close_tab(index) for index in self._get_project_tab_indices())
+
     def close_project_tabs(self) -> None:
         """Close all project-related tabs."""
-        for index in reversed(range(self._tab_widget.count())):
-            widget = self._tab_widget.widget(index)
-
-            if isinstance(widget, ContentOverviewWidget):
-                self._close_tab(index)
-                continue
-
-            if widget is not None and self._get_editor_from_tab(widget) is not None:
-                self._close_tab(index)
+        for index in reversed(self._get_project_tab_indices()):
+            self._close_tab(index, confirm=False)
 
     def _setup_layout(self) -> None:
         """Set up the workspace layout."""
@@ -67,7 +67,7 @@ class Workspace(QWidget):
         self._tab_widget = QTabWidget(self)
         self._tab_widget.setTabsClosable(True)
         self._tab_widget.setMovable(True)
-        self._tab_widget.tabCloseRequested.connect(self._close_tab)
+        self._tab_widget.tabCloseRequested.connect(self._on_tab_close_requested)
         self._tab_widget.currentChanged.connect(self._refresh_current_tab)
 
         self._layout.addWidget(self._tab_widget)
@@ -197,7 +197,7 @@ class Workspace(QWidget):
         ).exec()
 
     def _create_content(self, content_reference: ContentReference, content_id: str) -> None:
-        """Create and open a content editor.
+        """Create and open a new content editor.
 
         :param content_reference: Reference to the content.
         :param content_id: Content ID.
@@ -266,6 +266,13 @@ class Workspace(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
 
+        # Confirm every editor before deleting any items.
+        for item in items:
+            index = self._find_editor_tab(item)
+
+            if index is not None and not self._confirm_close_tab(index):
+                return
+
         content_widget = self._get_content_widget(content_reference)
         model = content_widget.model
 
@@ -274,7 +281,7 @@ class Workspace(QWidget):
             row = self._find_item_row(model, item)
 
             if row is not None:
-                self._close_editor_tab(item)
+                self._close_editor_tab(item, confirm=False)
                 self._project_service.remove_content(content_reference.content_type, item)
                 model.remove_item(row)
                 removed_count += 1
@@ -343,7 +350,6 @@ class Workspace(QWidget):
             raise ValueError(f"Unsupported content type: {content_type}.")
 
         editor = editor_class(item=item, context=context, parent=self)
-
         editor.saved.connect(lambda: self._handle_content_editor_saved(content_reference, item))
 
         return editor
@@ -421,7 +427,7 @@ class Workspace(QWidget):
         """Handle content saved from its editor.
 
         :param content_reference: Reference used to open the content.
-        :param item: Content item saved by the editor.
+        :param item: Content item saved by its editor.
         """
         if item.state is ContentState.SAVED:
             item.state = ContentState.MODIFIED
@@ -507,15 +513,19 @@ class Workspace(QWidget):
 
         return None
 
-    def _close_editor_tab(self, item: Content[Any]) -> None:
+    def _close_editor_tab(self, item: Content[Any], *, confirm: bool = True) -> bool:
         """Close the editor tab for the specified content item.
 
         :param item: Content item being deleted.
+        :param confirm: Whether to confirm closing unsaved changes.
+        :returns: Whether the tab was closed.
         """
         index = self._find_editor_tab(item)
 
-        if index is not None:
-            self._close_tab(index)
+        if index is None:
+            return True
+
+        return self._close_tab(index, confirm=confirm)
 
     def _find_editor_tab(self, item: Content[Any]) -> int | None:
         """Find an open editor tab for the specified content item.
@@ -536,22 +546,99 @@ class Workspace(QWidget):
         return None
 
     @staticmethod
-    def _get_editor_from_tab(widget: QWidget) -> BaseEditorWidget[Any] | None:
+    def _get_editor_from_tab(widget: QWidget) -> ContentEditorWidget[Any] | None:
         """Return the editor contained in a tab.
 
         :param widget: Tab widget.
         :returns: Editor if the tab contains one, otherwise None.
         """
-        if isinstance(widget, BaseEditorWidget):
+        if isinstance(widget, ContentEditorWidget):
             return widget
 
         if isinstance(widget, QScrollArea):
             content_widget = widget.widget()
 
-            if isinstance(content_widget, BaseEditorWidget):
+            if isinstance(content_widget, ContentEditorWidget):
                 return content_widget
 
         return None
+
+    def _get_project_tab_indices(self) -> list[int]:
+        """Return indices of all project-related tabs.
+
+        :returns: Indices of project-related tabs.
+        """
+        indices = []
+
+        for index in range(self._tab_widget.count()):
+            widget = self._tab_widget.widget(index)
+
+            if (
+                isinstance(widget, ContentOverviewWidget)
+                or widget is not None
+                and self._get_editor_from_tab(widget) is not None
+            ):
+                indices.append(index)
+
+        return indices
+
+    def _confirm_close_tab(self, index: int) -> bool:
+        """Confirm closing a tab with unsaved changes.
+
+        :param index: Index of the tab to close.
+        :returns: Whether the tab can be closed.
+        """
+        widget = self._tab_widget.widget(index)
+
+        if widget is None:
+            return True
+
+        editor = self._get_editor_from_tab(widget)
+
+        if editor is None or not editor.has_unsaved_changes:
+            return True
+
+        self._tab_widget.setCurrentIndex(index)
+
+        edited_item = editor.build_edited_item()
+        item_type = edited_item.CONTENT_TYPE.singular_display_name
+        item_name = edited_item.get_display_name("en")
+
+        answer = QMessageBox.warning(
+            self,
+            "Unsaved Changes",
+            f'{item_type} "{item_name}" contains unsaved changes. Do you want to save them?',
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+
+        if answer == QMessageBox.StandardButton.Save:
+            editor.save()
+            return True
+
+        return answer == QMessageBox.StandardButton.Discard
+
+    def _on_tab_close_requested(self, index: int) -> None:
+        """Handle a request to close a tab.
+
+        :param index: Index of the tab to close.
+        """
+        self._close_tab(index)
+
+    def _close_tab(self, index: int, *, confirm: bool = True) -> bool:
+        """Close the tab at the specified index.
+
+        :param index: Index of the tab to close.
+        :param confirm: Whether to confirm closing unsaved changes.
+        :returns: Whether the tab was closed.
+        """
+        if confirm and not self._confirm_close_tab(index):
+            return False
+
+        self._tab_widget.removeTab(index)
+        return True
 
     @staticmethod
     def _get_editor_tab_name(item: Content[Any]) -> str:
@@ -561,10 +648,6 @@ class Workspace(QWidget):
         :returns: Editor tab name.
         """
         return f"{item.id}"
-
-    def _close_tab(self, index: int) -> None:
-        """Close the tab at the specified index."""
-        self._tab_widget.removeTab(index)
 
     @staticmethod
     def _get_tab_name(content_reference: ContentReference) -> str:

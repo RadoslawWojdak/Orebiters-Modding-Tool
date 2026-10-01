@@ -1,9 +1,10 @@
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import PropertyMock, patch
 
 import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMessageBox, QScrollArea
+from pytestqt.qtbot import QtBot
 
 from orebiters_modding_tool.app.editors import ItemEditorWidget
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
@@ -231,7 +232,7 @@ def test_refresh_current_content_state_does_nothing_for_editor_tab(
 
 @patch("orebiters_modding_tool.app.widgets.workspace.ContentIdDialog")
 def test_add_content_opens_content_id_dialog(
-    dialog_class: object,
+    dialog_class,
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
@@ -278,17 +279,17 @@ def test_create_content_adds_item_to_project_model_and_scrollable_editor(
 
 
 def test_create_content_emits_content_changed(
+    qtbot: QtBot,
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
     """Emit a structured content change after creating content."""
     workspace.open_content(materials_category_reference)
-    received: list[ContentChange] = []
-    workspace.content_changed.connect(received.append)
 
-    workspace._create_content(materials_category_reference, "iron_ore")
+    with qtbot.waitSignal(workspace.content_changed) as blocker:
+        workspace._create_content(materials_category_reference, "iron_ore")
 
-    assert received == [
+    assert blocker.args == [
         ContentChange(
             change_type=ContentChangeType.CREATED,
             content_type=ContentType.MATERIALS,
@@ -644,6 +645,7 @@ def test_create_editor_context_raises_without_active_project(
 
 
 def test_saving_content_emits_updated_change_and_marks_project_modified(
+    qtbot: QtBot,
     workspace: Workspace,
     materials_category_reference: ContentReference,
 ) -> None:
@@ -657,18 +659,19 @@ def test_saving_content_emits_updated_change_and_marks_project_modified(
     _, _, editor_widget = _get_editor_tab(workspace, material)
 
     material.id = "refined_iron"
-    received: list[ContentChange] = []
-    workspace.content_changed.connect(received.append)
 
-    editor_widget.saved.emit()
+    with qtbot.waitSignal(workspace.content_changed) as blocker:
+        editor_widget.saved.emit()
 
     assert material.state is ContentState.NEW
     assert project.has_unsaved_changes is True
-    assert received[-1] == ContentChange(
-        change_type=ContentChangeType.UPDATED,
-        content_type=ContentType.MATERIALS,
-        content_name="test.test_mod.materials.refined_iron",
-    )
+    assert blocker.args == [
+        ContentChange(
+            change_type=ContentChangeType.UPDATED,
+            content_type=ContentType.MATERIALS,
+            content_name="test.test_mod.materials.refined_iron",
+        )
+    ]
 
 
 def test_saving_saved_content_marks_it_as_modified(
@@ -879,3 +882,169 @@ def test_get_tab_name_returns_content_type_and_content_id() -> None:
     reference = ContentReferenceFactory.create("orebiters.core.materials.iron")
 
     assert Workspace._get_tab_name(reference) == "Materials iron"
+
+
+# =============================================================================
+# Closing tabs and handling unsaved changes
+# =============================================================================
+
+
+def test_confirm_close_tab_closes_clean_editor_without_prompt(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Allow closing an editor without unsaved changes without prompting."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+    index, _, editor = _get_editor_tab(workspace, material)
+
+    with (
+        patch.object(
+            BaseEditorWidget, "has_unsaved_changes", new_callable=PropertyMock, return_value=False
+        ),
+        patch("orebiters_modding_tool.app.widgets.workspace.QMessageBox.warning") as warning,
+    ):
+        assert workspace._confirm_close_tab(index) is True
+
+    warning.assert_not_called()
+    assert workspace._tab_widget.currentIndex() == index
+
+
+@pytest.mark.parametrize(
+    ("answer", "expected_result", "should_save", "should_close"),
+    [
+        (QMessageBox.StandardButton.Save, True, True, True),
+        (QMessageBox.StandardButton.Discard, True, False, True),
+        (QMessageBox.StandardButton.Cancel, False, False, False),
+    ],
+)
+def test_close_tab_handles_unsaved_changes_confirmation(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+    answer: QMessageBox.StandardButton,
+    expected_result: bool,
+    should_save: bool,
+    should_close: bool,
+) -> None:
+    """Handle Save, Discard, and Cancel when closing an edited tab."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+    index, editor_tab, editor = _get_editor_tab(workspace, material)
+
+    with (
+        patch.object(
+            BaseEditorWidget, "has_unsaved_changes", new_callable=PropertyMock, return_value=True
+        ),
+        patch.object(editor, "save") as save,
+        patch(
+            "orebiters_modding_tool.app.widgets.workspace.QMessageBox.warning", return_value=answer
+        ) as warning,
+    ):
+        result = workspace._close_tab(index)
+
+    assert result is expected_result
+    assert workspace._tab_widget.indexOf(editor_tab) == (-1 if should_close else index)
+    assert save.call_count == int(should_save)
+    warning.assert_called_once_with(
+        workspace,
+        "Unsaved Changes",
+        'Material "iron ore" contains unsaved changes. Do you want to save them?',
+        QMessageBox.StandardButton.Save
+        | QMessageBox.StandardButton.Discard
+        | QMessageBox.StandardButton.Cancel,
+        QMessageBox.StandardButton.Save,
+    )
+
+
+def test_confirm_close_tab_selects_editor_before_showing_confirmation(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Select the editor tab before asking how to handle unsaved changes."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    project = workspace._project_service.active_project
+    assert project is not None
+    material = project.content[ContentType.MATERIALS][0]
+    index, _, editor = _get_editor_tab(workspace, material)
+    workspace._tab_widget.setCurrentIndex(0)
+
+    def confirm_warning(*args: object) -> QMessageBox.StandardButton:
+        assert workspace._tab_widget.currentIndex() == index
+        return QMessageBox.StandardButton.Cancel
+
+    with (
+        patch.object(
+            BaseEditorWidget, "has_unsaved_changes", new_callable=PropertyMock, return_value=True
+        ),
+        patch(
+            "orebiters_modding_tool.app.widgets.workspace.QMessageBox.warning",
+            side_effect=confirm_warning,
+        ),
+    ):
+        assert workspace._confirm_close_tab(index) is False
+
+
+def test_confirm_project_tabs_close_stops_when_a_tab_close_is_cancelled(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Stop closing project tabs when one tab cannot be closed."""
+    workspace.open_content(materials_category_reference)
+
+    with patch.object(workspace, "_confirm_close_tab", return_value=False) as confirm:
+        assert workspace.confirm_project_tabs_close() is False
+
+    confirm.assert_called_once_with(1)
+
+
+def test_confirm_project_tabs_close_checks_all_project_tabs(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Confirm every project tab while leaving the Welcome tab out of the process."""
+    workspace.open_content(materials_category_reference)
+    workspace._create_content(materials_category_reference, "iron_ore")
+
+    with patch.object(workspace, "_confirm_close_tab", return_value=True) as confirm:
+        assert workspace.confirm_project_tabs_close() is True
+
+    assert [call.args[0] for call in confirm.call_args_list] == [1, 2]
+
+
+def test_close_tab_does_not_remove_tab_when_confirmation_is_cancelled(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Keep a tab open when the user cancels its close confirmation."""
+    workspace.open_content(materials_category_reference)
+    initial_count = workspace._tab_widget.count()
+
+    with patch.object(workspace, "_confirm_close_tab", return_value=False):
+        assert workspace._close_tab(1) is False
+
+    assert workspace._tab_widget.count() == initial_count
+
+
+def test_close_tab_removes_tab_without_confirmation_when_requested(
+    workspace: Workspace,
+    materials_category_reference: ContentReference,
+) -> None:
+    """Remove a tab directly when confirmation is disabled."""
+    workspace.open_content(materials_category_reference)
+    content_widget = workspace._tab_widget.widget(1)
+
+    with patch.object(workspace, "_confirm_close_tab") as confirm:
+        assert workspace._close_tab(1, confirm=False) is True
+
+    confirm.assert_not_called()
+    assert workspace._tab_widget.indexOf(content_widget) == -1
