@@ -102,6 +102,7 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         header_layout.addStretch()
 
         self._toolbar = self._create_toolbar()
+        self._set_toolbar_button_object_names()
         header_layout.addWidget(self._toolbar)
 
         layout.addLayout(header_layout)
@@ -143,6 +144,20 @@ class ContentOverviewWidget[T: Content[Any]](QWidget):
         self.addAction(self._select_all_action)
 
         return toolbar
+
+    def _set_toolbar_button_object_names(self) -> None:
+        """Set object names for toolbar buttons."""
+        buttons = {
+            self._add_action: "addButton",
+            self._edit_action: "editButton",
+            self._delete_action: "deleteButton",
+        }
+
+        for action, object_name in buttons.items():
+            button = self._toolbar.widgetForAction(action)
+
+            if button is not None:
+                button.setObjectName(object_name)
 
     def _create_filter_edit(self) -> QLineEdit:
         """Create the content filter input.
