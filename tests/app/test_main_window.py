@@ -1,5 +1,6 @@
 from unittest.mock import Mock, patch
 
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QCloseEvent, QKeySequence, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
@@ -7,6 +8,7 @@ from PySide6.QtWidgets import (
     QDialog,
     QLabel,
     QMessageBox,
+    QScrollBar,
     QTableView,
     QVBoxLayout,
     QWidget,
@@ -25,11 +27,11 @@ from orebiters_modding_tool.services.project_service import ProjectService
 
 def create_selection_test_ui(window: MainWindow) -> tuple[QTableView, QLabel]:
     """Create a table and a label outside the table for selection tests."""
-    central_widget = QWidget()
-    layout = QVBoxLayout(central_widget)
+    tab = QWidget()
+    layout = QVBoxLayout(tab)
 
     table = QTableView()
-    model = QStandardItemModel(2, 1, table)
+    model = QStandardItemModel(3, 1, table)
     model.setHorizontalHeaderLabels(["Name"])
     model.setItem(0, 0, QStandardItem("First row"))
     model.setItem(1, 0, QStandardItem("Second row"))
@@ -43,7 +45,9 @@ def create_selection_test_ui(window: MainWindow) -> tuple[QTableView, QLabel]:
     layout.addWidget(table)
     layout.addWidget(label)
 
-    window.setCentralWidget(central_widget)
+    tab_widget = window._workspace._tab_widget
+    tab_widget.addTab(tab, "Selection Test")
+    tab_widget.setCurrentWidget(tab)
 
     return table, label
 
@@ -686,6 +690,104 @@ def test_down_moves_selection_after_clicking_outside_table(
 
     assert table.currentIndex() == next_index
     assert table.selectionModel().selectedRows() == [next_index]
+
+
+@pytest.mark.parametrize(
+    "object_name",
+    ["addButton", "editButton", "deleteButton"],
+)
+def test_preserves_table_selection_for_toolbar_buttons(
+    object_name: str,
+    project_service: ProjectService,
+    qapp: QApplication,
+) -> None:
+    """Preserve table selections for toolbar buttons without triggering their actions."""
+    window = MainWindow(project_service)
+    button = QWidget(window._workspace)
+    button.setObjectName(object_name)
+
+    assert window._preserves_table_selection(button)
+
+
+def test_clicking_scrollbar_preserves_table_selection(
+    project_service: ProjectService,
+    qtbot: QtBot,
+) -> None:
+    """Preserve the row selection when clicking a scrollbar."""
+    window = MainWindow(project_service)
+    qtbot.addWidget(window)
+
+    table, _ = create_selection_test_ui(window)
+
+    scrollbar = QScrollBar(window)
+    scrollbar.setGeometry(10, 10, 100, 20)
+
+    window.show()
+    qtbot.waitExposed(window)
+
+    index = table.model().index(0, 0)
+    table.selectRow(index.row())
+
+    assert table.selectionModel().selectedRows() == [index]
+
+    qtbot.mouseClick(scrollbar, Qt.MouseButton.LeftButton, pos=scrollbar.rect().center())
+
+    assert table.selectionModel().selectedRows() == [index]
+
+
+def test_clicking_tab_bar_preserves_table_selection(
+    project_service: ProjectService,
+    qtbot: QtBot,
+) -> None:
+    """Preserve the row selection when clicking the tab bar."""
+    window = MainWindow(project_service)
+    qtbot.addWidget(window)
+
+    table, _ = create_selection_test_ui(window)
+
+    window.show()
+    qtbot.waitExposed(window)
+
+    index = table.model().index(0, 0)
+    table.selectRow(index.row())
+
+    assert table.selectionModel().selectedRows() == [index]
+
+    tab_bar = window._workspace.tab_bar
+    qtbot.mouseClick(tab_bar, Qt.MouseButton.LeftButton, pos=tab_bar.rect().center())
+
+    assert table.selectionModel().selectedRows() == [index]
+
+
+def test_clicking_outside_table_does_not_clear_selection_on_inactive_tab(
+    project_service: ProjectService,
+    qtbot: QtBot,
+) -> None:
+    """Clear selection only on the active tab."""
+    window = MainWindow(project_service)
+    qtbot.addWidget(window)
+
+    inactive_table, _ = create_selection_test_ui(window)
+    active_table, active_label = create_selection_test_ui(window)
+
+    window.show()
+    qtbot.waitExposed(window)
+
+    assert window._workspace.current_tab is not None
+
+    inactive_index = inactive_table.model().index(0, 0)
+    active_index = active_table.model().index(0, 0)
+
+    inactive_table.selectRow(inactive_index.row())
+    active_table.selectRow(active_index.row())
+
+    assert inactive_table.selectionModel().selectedRows() == [inactive_index]
+    assert active_table.selectionModel().selectedRows() == [active_index]
+
+    qtbot.mouseClick(active_label, Qt.MouseButton.LeftButton)
+
+    assert active_table.selectionModel().selectedRows() == []
+    assert inactive_table.selectionModel().selectedRows() == [inactive_index]
 
 
 # =============================================================================

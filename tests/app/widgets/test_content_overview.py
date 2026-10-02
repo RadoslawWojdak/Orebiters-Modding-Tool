@@ -1,7 +1,8 @@
 from unittest.mock import patch
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QWidget
+from pytestqt.qtbot import QtBot
 
 from orebiters_modding_tool.app.models.material_table_model import MaterialTableModel
 from orebiters_modding_tool.app.widgets.content_overview import (
@@ -43,7 +44,7 @@ def create_widget(materials: list[Material]) -> ContentOverviewWidget[Material]:
     )
 
 
-def show_widget(qtbot, widget: ContentOverviewWidget[Material]) -> None:
+def show_widget(qtbot: QtBot, widget: ContentOverviewWidget[Material]) -> None:
     """Show the widget and wait for table layout initialization.
 
     :param qtbot: Qt test helper.
@@ -86,6 +87,27 @@ def get_visible_item_ids(widget: ContentOverviewWidget[Material]) -> list[str]:
 
 
 # =============================================================================
+# Initialization
+# =============================================================================
+
+
+def test_initializes_content_overview(qapp: QApplication) -> None:
+    """Initialize the content overview with its expected UI structure."""
+    widget = create_widget(create_materials())
+
+    assert widget._toolbar.isMovable() is False
+
+    expected_button_names = {"addButton", "editButton", "deleteButton"}
+    actual_button_names = {
+        button.objectName()
+        for button in widget._toolbar.findChildren(QWidget)
+        if button.objectName() in expected_button_names
+    }
+
+    assert expected_button_names <= actual_button_names
+
+
+# =============================================================================
 # Public API
 # =============================================================================
 
@@ -120,7 +142,7 @@ def test_refresh_content_states_refreshes_model(qapp: QApplication) -> None:
 # =============================================================================
 
 
-def test_add_action_emits_add_requested(qtbot) -> None:
+def test_add_action_emits_add_requested(qtbot: QtBot) -> None:
     """Emit the content reference when adding content."""
     widget = create_widget([])
     show_widget(qtbot, widget)
@@ -138,7 +160,7 @@ def test_add_action_emits_add_requested(qtbot) -> None:
 # =============================================================================
 
 
-def test_edit_action_does_nothing_without_selection(qtbot) -> None:
+def test_edit_action_does_nothing_without_selection(qtbot: QtBot) -> None:
     """Do not request editing without a selection."""
     widget = create_widget(create_materials())
     show_widget(qtbot, widget)
@@ -151,7 +173,7 @@ def test_edit_action_does_nothing_without_selection(qtbot) -> None:
     assert received == []
 
 
-def test_edit_action_emits_selected_items(qtbot) -> None:
+def test_edit_action_emits_selected_items(qtbot: QtBot) -> None:
     """Emit selected items when editing."""
     materials = create_materials()
     widget = create_widget(materials)
@@ -166,7 +188,7 @@ def test_edit_action_emits_selected_items(qtbot) -> None:
     assert received == [(widget.content_reference, [materials[0], materials[2]])]
 
 
-def test_edit_action_emits_items_in_view_order(qtbot) -> None:
+def test_edit_action_emits_items_in_view_order(qtbot: QtBot) -> None:
     """Emit selected items in the order of the displayed rows."""
     materials = create_materials()
     widget = create_widget(materials)
@@ -187,7 +209,7 @@ def test_edit_action_emits_items_in_view_order(qtbot) -> None:
 # =============================================================================
 
 
-def test_delete_action_does_nothing_without_selection(qtbot) -> None:
+def test_delete_action_does_nothing_without_selection(qtbot: QtBot) -> None:
     """Do not request deletion without a selection."""
     widget = create_widget(create_materials())
     show_widget(qtbot, widget)
@@ -200,7 +222,7 @@ def test_delete_action_does_nothing_without_selection(qtbot) -> None:
     assert received == []
 
 
-def test_delete_action_emits_selected_items(qtbot) -> None:
+def test_delete_action_emits_selected_items(qtbot: QtBot) -> None:
     """Emit selected items when deleting."""
     materials = create_materials()
     widget = create_widget(materials)
@@ -220,7 +242,7 @@ def test_delete_action_emits_selected_items(qtbot) -> None:
 # =============================================================================
 
 
-def test_double_click_emits_clicked_item(qtbot) -> None:
+def test_double_click_emits_clicked_item(qtbot: QtBot) -> None:
     """Request editing the item double-clicked by the user."""
     materials = create_materials()
     widget = create_widget(materials)
@@ -241,7 +263,7 @@ def test_double_click_emits_clicked_item(qtbot) -> None:
     assert received == [(widget.content_reference, [materials[1]])]
 
 
-def test_double_click_resolves_item_after_sorting(qtbot) -> None:
+def test_double_click_resolves_item_after_sorting(qtbot: QtBot) -> None:
     """Resolve the correct item after the displayed rows are sorted."""
     materials = create_materials()
     widget = create_widget(materials)
@@ -267,7 +289,7 @@ def test_double_click_resolves_item_after_sorting(qtbot) -> None:
 # =============================================================================
 
 
-def test_select_all_action_selects_all_rows(qtbot) -> None:
+def test_select_all_action_selects_all_rows(qtbot: QtBot) -> None:
     """Select all rows in the table."""
     widget = create_widget(create_materials())
     show_widget(qtbot, widget)

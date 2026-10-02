@@ -1,7 +1,7 @@
 from typing import Any
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabWidget, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QMessageBox, QScrollArea, QTabBar, QTabWidget, QVBoxLayout, QWidget
 
 from orebiters_modding_tool.app.dialogs.content_id_dialog import ContentIdDialog
 from orebiters_modding_tool.app.editors.base_editor_widget import BaseEditorWidget
@@ -37,6 +37,16 @@ class Workspace(QWidget):
         self._setup_layout()
         self._setup_tab_widget()
         self._setup_welcome_tab()
+
+    @property
+    def current_tab(self) -> QWidget | None:
+        """Return the currently active tab."""
+        return self._tab_widget.currentWidget()
+
+    @property
+    def tab_bar(self) -> QTabBar:
+        """Return the workspace tab bar."""
+        return self._tab_widget.tabBar()
 
     def refresh_current_content_state(self) -> None:
         """Refresh the content state display of the current tab."""
